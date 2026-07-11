@@ -91,6 +91,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             uuid TEXT UNIQUE NOT NULL,
             phone TEXT NOT NULL,
+            name TEXT DEFAULT '',
             activation_code TEXT NOT NULL,
             hardware_id TEXT DEFAULT '',
             device_install_id TEXT DEFAULT '',
@@ -159,6 +160,7 @@ class APIHandler(BaseHTTPRequestHandler):
                 return self._send({
                     "activated": True,
                     "phone": user["phone"],
+                    "name": user["name"],
                     "expires_at": user["expires_at"],
                     "message": "Device is active"
                 })
