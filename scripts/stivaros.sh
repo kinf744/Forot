@@ -114,10 +114,11 @@ def init_db():
             isp TEXT DEFAULT '',
             mode TEXT DEFAULT '',
             flow TEXT DEFAULT '',
+            tier TEXT DEFAULT '150',
             xray_uuid TEXT DEFAULT '6e3b3083-f69d-4c98-a6d8-a8134a6d99f6',
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
-        CREATE INDEX IF NOT EXISTS idx_vpn_configs_user_isp_mode ON vpn_configs(user_id, isp, mode);
+        CREATE INDEX IF NOT EXISTS idx_vpn_configs_user_isp_tier ON vpn_configs(user_id, isp, tier);
     """)
     conn.commit()
     conn.close()
@@ -139,11 +140,6 @@ def detect_isp(ip):
     except Exception:
         return "unknown"
 
-MODE_CONFIGS = {
-    "normal": {"transport": "xhttp", "flow": ""},
-    "bad": {"transport": "xhttp", "flow": ""},
-    "speed": {"transport": "xhttp", "flow": ""},
-}
 
 class APIHandler(BaseHTTPRequestHandler):
     def _send(self, data, status=200):
@@ -198,8 +194,9 @@ class APIHandler(BaseHTTPRequestHandler):
             uuid = params.get("uuid", [None])[0]
             code = params.get("code", [""])[0]
             mode = params.get("mode", ["normal"])[0]
-            if mode not in ("normal", "bad", "speed"):
-                return self._send({"success": False, "message": "Invalid mode"}, 400)
+            tier = params.get("tier", ["150"])[0]
+            if tier not in ("150", "100"):
+                return self._send({"success": False, "message": "Invalid tier"}, 400)
             user = self._get_user_by_uuid(uuid)
             if not user or not user["active"]:
                 return self._send({"success": False, "message": "User not found or inactive"}, 404)
@@ -214,36 +211,34 @@ class APIHandler(BaseHTTPRequestHandler):
 
             conn = get_db()
             cfg = conn.execute(
-                "SELECT * FROM vpn_configs WHERE user_id = ? AND isp = ? AND mode = ?",
-                (user["id"], isp, mode)
+                "SELECT * FROM vpn_configs WHERE user_id = ? AND isp = ? AND tier = ? AND mode = ?",
+                (user["id"], isp, tier, mode)
             ).fetchone()
             if not cfg:
                 cfg = conn.execute(
-                    "SELECT * FROM vpn_configs WHERE user_id = ? AND isp = ? AND mode = ''",
-                    (user["id"], isp)
+                    "SELECT * FROM vpn_configs WHERE user_id = ? AND isp = ? AND tier = ? AND mode = ''",
+                    (user["id"], isp, tier)
                 ).fetchone()
             if not cfg:
                 cfg = conn.execute(
-                    "SELECT * FROM vpn_configs WHERE user_id = ? AND isp = '' AND mode = ''",
-                    (user["id"],)
+                    "SELECT * FROM vpn_configs WHERE user_id = ? AND isp = '' AND tier = ? AND mode = ''",
+                    (user["id"], tier)
                 ).fetchone()
             conn.close()
 
             if cfg:
-                mode_cfg = MODE_CONFIGS.get(mode, MODE_CONFIGS["normal"])
-                transport = cfg["transport"] if cfg["transport"] and cfg["transport"] != "tcp" else mode_cfg["transport"]
-                flow = cfg["flow"] if cfg["flow"] else mode_cfg["flow"]
                 return self._send({
                     "success": True,
                     "isp": isp,
                     "mode": mode,
+                    "tier": tier,
                     "address": cfg["server_address"],
                     "port": cfg["server_port"],
                     "protocol": cfg["protocol"],
-                    "transport": transport,
+                    "transport": cfg["transport"] or "xhttp",
                     "tls": bool(cfg["tls"]),
                     "sni": cfg["sni"] or cfg["server_address"],
-                    "flow": flow,
+                    "flow": cfg["flow"] or "",
                     "public_key": cfg["public_key"] or "",
                     "short_id": cfg["short_id"] or "",
                     "config_id": cfg["id"],
@@ -510,21 +505,37 @@ create_user() {
 INSERT INTO users (uuid, phone, name, activation_code, expires_at, active)
 VALUES ('$uuid', '$phone', '$name', '$code', '$expires', 1);
 
--- Default config (used as fallback)
-INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, xray_uuid)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', '', '', '', '$xray_uuid');
+-- Default config (tier 150)
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, tier, xray_uuid)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', '', '', '', '150', '$xray_uuid');
 
--- ISP-specific configs with dynamic SNI per carrier
-INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, xray_uuid)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, 'mtnplay.com', 'mtn', '', '', '$xray_uuid');
-INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, xray_uuid)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', 'orange', '', '', '$xray_uuid');
-INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, xray_uuid)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', 'camtel', '', '', '$xray_uuid');
-INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, xray_uuid)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', 'blue', '', '', '$xray_uuid');
-INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, xray_uuid)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', 'unknown', '', '', '$xray_uuid');
+-- Default config (tier 100)
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, tier, xray_uuid)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', '', '', '', '100', '$xray_uuid');
+
+-- ISP-specific configs (tier 150)
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, tier, xray_uuid)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, 'mtnplay.com', 'mtn', '', '', '150', '$xray_uuid');
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, tier, xray_uuid)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', 'orange', '', '', '150', '$xray_uuid');
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, tier, xray_uuid)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', 'camtel', '', '', '150', '$xray_uuid');
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, tier, xray_uuid)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', 'blue', '', '', '150', '$xray_uuid');
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, tier, xray_uuid)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', 'unknown', '', '', '150', '$xray_uuid');
+
+-- ISP-specific configs (tier 100)
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, tier, xray_uuid)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, 'mtnplay.com', 'mtn', '', '', '100', '$xray_uuid');
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, tier, xray_uuid)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', 'orange', '', '', '100', '$xray_uuid');
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, tier, xray_uuid)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', 'camtel', '', '', '100', '$xray_uuid');
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, tier, xray_uuid)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', 'blue', '', '', '100', '$xray_uuid');
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, tier, xray_uuid)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', 'unknown', '', '', '100', '$xray_uuid');
 EOF
 
     echo

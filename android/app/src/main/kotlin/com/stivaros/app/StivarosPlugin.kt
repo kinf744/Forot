@@ -80,12 +80,20 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 val serverPort = call.argument<Int>("port") ?: 443
                 val uuid = call.argument<String>("uuid") ?: ""
                 val protocol = call.argument<String>("protocol") ?: "vless"
-                val transport = call.argument<String>("transport") ?: "tcp"
+                val transport = call.argument<String>("transport") ?: "xhttp"
                 val tls = call.argument<Boolean>("tls") ?: true
                 val sni = call.argument<String>("sni") ?: serverAddress
                 val publicKey = call.argument<String>("publicKey") ?: ""
                 val shortId = call.argument<String>("shortId") ?: ""
-                val flow = call.argument<String>("flow") ?: if (tls) "xtls-rprx-vision" else ""
+                val flow = call.argument<String>("flow") ?: ""
+
+                xrayManager?.errorCallback = { msg ->
+                    val intent = Intent(StivarosVpnService.BROADCAST_STATUS).apply {
+                        putExtra(StivarosVpnService.EXTRA_STATUS, "ERROR")
+                        putExtra(StivarosVpnService.EXTRA_MESSAGE, msg)
+                    }
+                    context.sendBroadcast(intent)
+                }
 
                 try {
                     xrayManager?.start(

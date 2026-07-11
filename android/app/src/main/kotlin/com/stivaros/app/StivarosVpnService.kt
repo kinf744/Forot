@@ -72,11 +72,16 @@ class StivarosVpnService : VpnService() {
                 val serverPort = intent.getIntExtra("port", 443)
                 val uuid = intent.getStringExtra("uuid") ?: return@launch
                 val protocol = intent.getStringExtra("protocol") ?: "vless"
-                val transport = intent.getStringExtra("transport") ?: "tcp"
+                val transport = intent.getStringExtra("transport") ?: "xhttp"
                 val tls = intent.getBooleanExtra("tls", true)
                 val sni = intent.getStringExtra("sni") ?: serverAddress
                 val publicKey = intent.getStringExtra("publicKey") ?: ""
                 val shortId = intent.getStringExtra("shortId") ?: ""
+
+                // Wire up Xray error callback
+                xrayManager?.errorCallback = { msg ->
+                    updateStatus("ERROR", msg)
+                }
 
                 // Start Xray
                 xrayManager?.start(

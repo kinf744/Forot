@@ -22,6 +22,7 @@ class XrayManager(private val context: Context) {
     private var socksPort: Int = 0
     private var xrayProcess: Process? = null
     private var running = false
+    var errorCallback: ((String) -> Unit)? = null
 
     fun getSocksPort(): Int = socksPort
     fun isRunning(): Boolean = running
@@ -31,12 +32,12 @@ class XrayManager(private val context: Context) {
         serverPort: Int,
         uuid: String,
         protocol: String = "vless",
-        transport: String = "tcp",
+        transport: String = "xhttp",
         tls: Boolean = true,
         sni: String = serverAddress,
         publicKey: String = "",
         shortId: String = "",
-        flow: String = if (tls) "xtls-rprx-vision" else ""
+        flow: String = ""
     ) {
         stop()
         socksPort = getFreePort()
@@ -129,6 +130,12 @@ class XrayManager(private val context: Context) {
         sb.appendLine("""      "network": "$transport",""")
 
         when (transport) {
+            "xhttp" -> {
+                sb.appendLine("""      "xhttpSettings": {""")
+                sb.appendLine("""        "path": "/vless-xhttp",""")
+                sb.appendLine("""        "mode": "auto""")
+                sb.appendLine("""      },""")
+            }
             "ws" -> {
                 sb.appendLine("""      "wsSettings": {""")
                 sb.appendLine("""        "path": "/",""")
@@ -231,10 +238,14 @@ class XrayManager(private val context: Context) {
                         when {
                             lower.contains("started") && lower.contains("xray") ->
                                 Log.i(TAG, "Xray started")
+                            lower.contains("302") || lower.contains("http/") ||
+                            lower.contains("redirect") || lower.contains("captive") ->
+                                errorCallback?.invoke("HTTP_302")
                             (lower.contains("error") || lower.contains("fatal")) &&
                             !lower.contains("warning") && !lower.contains("deprecated") ->
-                                Log.e(TAG, "Xray: ${line.take(150)}")
+                                errorCallback?.invoke("XRAY_ERROR")
                         }
+                        Log.w(TAG, "Xray stderr: ${line.take(150)}")
                     }
                 }
             } catch (_: Exception) {}

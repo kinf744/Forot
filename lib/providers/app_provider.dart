@@ -17,7 +17,12 @@ class AppProvider extends ChangeNotifier {
   String _hardwareId = '';
   String _deviceId = '';
   StreamSubscription? _statusSubscription;
+  StreamSubscription? _errorSubscription;
   StreamSubscription? _trafficSubscription;
+
+  String _currentTier = '150';
+  int _retryCount = 0;
+  static const int _maxRetries = 10;
 
   int _rxBytes = 0;
   int _txBytes = 0;
@@ -39,6 +44,7 @@ class AppProvider extends ChangeNotifier {
   String get deviceId => _deviceId;
   bool get isActivated => _user != null;
   bool get isConnected => _connectionState == VpnState.connected;
+  String get currentTier => _currentTier;
   String _modeLabel = '';
   String _ispLabel = '';
   String get modeLabel => _modeLabel;
@@ -69,6 +75,7 @@ class AppProvider extends ChangeNotifier {
     _statusSubscription = VpnService.statusStream.listen((status) {
       switch (status) {
         case 'CONNECTED':
+          _retryCount = 0;
           _connectionState = VpnState.connected;
           break;
         case 'CONNECTING':
@@ -83,12 +90,84 @@ class AppProvider extends ChangeNotifier {
       }
       notifyListeners();
     });
+
+    _errorSubscription?.cancel();
+    _errorSubscription = VpnService.errorStream.listen((msg) {
+      _handleError(msg);
+    });
   }
 
-  void setAutoConfig(ServerConfig config, String isp, String modeLabel) {
+  Future<void> _handleError(String msg) async {
+    if (_connectionState != VpnState.connected && _connectionState != VpnState.connecting) {
+      return;
+    }
+    if (msg == 'HTTP_302') {
+      if (_currentTier == '150') {
+        _currentTier = '100';
+        _retryCount = 0;
+        _errorMessage = 'Basculement vers 100Mo...';
+        _connectionState = VpnState.connecting;
+        notifyListeners();
+        await _reconnectCurrentTier();
+      } else {
+        _retryCount++;
+        if (_retryCount >= _maxRetries) {
+          _errorMessage = 'Forfait épuisé. Réessayez plus tard.';
+          await disconnect();
+        } else {
+          _errorMessage = 'Tentative $_retryCount/$_maxRetries...';
+          _connectionState = VpnState.connecting;
+          notifyListeners();
+          await _reconnectCurrentTier();
+        }
+      }
+    } else {
+      _errorMessage = 'Erreur de connexion';
+      await disconnect();
+    }
+  }
+
+  Future<void> _reconnectCurrentTier() async {
+    if (_user == null) return;
+    final result = await ApiService.getAutoConfig(
+      uuid: _user!.uuid,
+      activationCode: _user!.activationCode,
+      mode: 'normal',
+      tier: _currentTier,
+    );
+    if (!(result['success'] == true)) {
+      _errorMessage = 'Configuration indisponible';
+      await disconnect();
+      return;
+    }
+    final config = ServerConfig.fromJson(result);
+    _serverConfig = config;
+    _modeLabel = _currentTier == '150' ? '150Mo' : '100Mo';
+    notifyListeners();
+
+    final connected = await VpnService.connect(
+      address: config.address,
+      port: config.port,
+      uuid: config.xrayUuid ?? _user!.uuid,
+      protocol: config.protocol,
+      transport: config.transport,
+      tls: config.tls,
+      sni: config.sni,
+      publicKey: config.publicKey ?? '',
+      shortId: config.shortId ?? '',
+      flow: config.flow ?? '',
+    );
+    if (connected) {
+      await _recordBaseline();
+      _startTrafficPolling();
+    }
+  }
+
+  void setAutoConfig(ServerConfig config, String isp, String modeLabel, {String? tier}) {
     _serverConfig = config;
     _ispLabel = isp;
     _modeLabel = modeLabel;
+    if (tier != null) _currentTier = tier;
     final existing = _user;
     _user = User(
       uuid: existing?.uuid ?? _deviceId,
@@ -152,6 +231,8 @@ class AppProvider extends ChangeNotifier {
     }
 
     final config = _serverConfig!;
+    _currentTier = '150';
+    _retryCount = 0;
     _connectionState = VpnState.connecting;
     notifyListeners();
 
@@ -165,7 +246,7 @@ class AppProvider extends ChangeNotifier {
       sni: config.sni,
       publicKey: config.publicKey ?? '',
       shortId: config.shortId ?? '',
-      flow: config.flow ?? (config.tls ? 'xtls-rprx-vision' : ''),
+      flow: config.flow ?? '',
     );
 
     if (success) {
@@ -190,6 +271,8 @@ class AppProvider extends ChangeNotifier {
     _connectionState = VpnState.disconnected;
     _modeLabel = '';
     _ispLabel = '';
+    _currentTier = '150';
+    _retryCount = 0;
     notifyListeners();
   }
 

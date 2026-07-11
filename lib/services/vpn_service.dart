@@ -79,11 +79,23 @@ class VpnService {
     }
   }
 
-  static Stream<String> get statusStream {
+  static Stream<Map<String, dynamic>> get statusEventStream {
     return _statusChannel.receiveBroadcastStream().map((event) {
-      final status = event['status'] as String? ?? 'DISCONNECTED';
-      return status;
+      return {
+        'status': event['status'] as String? ?? 'DISCONNECTED',
+        'message': event['message'] as String? ?? '',
+      };
     });
+  }
+
+  static Stream<String> get statusStream {
+    return statusEventStream.map((e) => e['status'] as String);
+  }
+
+  static Stream<String> get errorStream {
+    return statusEventStream
+        .where((e) => e['status'] == 'ERROR' && (e['message'] as String).isNotEmpty)
+        .map((e) => e['message'] as String);
   }
 
   static void dispose() {
