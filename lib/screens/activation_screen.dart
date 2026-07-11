@@ -49,45 +49,16 @@ class _ActivationScreenState extends State<ActivationScreen> {
     if (!mounted) return;
 
     if (success) {
-      setState(() => _statusMessage = 'Détection de l\'opérateur...');
+      setState(() => _statusMessage = 'Téléchargement des configurations...');
 
-      final configOk = await provider.autoConfig();
+      await provider.autoConfig();
 
       if (!mounted) return;
 
-      if (configOk) {
-        setState(() => _statusMessage = 'Connexion VPN...');
-
-        final connected = await provider.connect();
-
-        if (!mounted) return;
-
-        if (connected) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const HomeScreen()),
-          );
-        } else {
-          setState(() {
-            _loading = false;
-            _statusMessage = '';
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(provider.errorMessage.isNotEmpty ? provider.errorMessage : 'Échec de connexion'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      } else {
-        setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Configuration indisponible. Contactez l\'admin.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
     } else {
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(

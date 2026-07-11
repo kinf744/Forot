@@ -240,7 +240,7 @@ class AppProvider extends ChangeNotifier {
 
   Future<bool> autoConfig() async {
     if (_user == null) return false;
-    _modeLabel = 'Connexion';
+    _modeLabel = '';
     _ispLabel = await ApiService.detectIsp();
     final result = await ApiService.getAutoConfig(
       uuid: _user!.uuid,
