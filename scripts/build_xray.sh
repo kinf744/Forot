@@ -1,23 +1,13 @@
 #!/bin/bash
 set -e
 
-JNILIBS_DIR="android/app/src/main/jniLibs"
-declare -A PLATFORMS
-PLATFORMS["arm64-v8a"]="Xray-android-arm64-v8a"
-PLATFORMS["x86_64"]="Xray-android-amd64"
+ASSETS_DIR="android/app/src/main/assets/xray"
+mkdir -p "$ASSETS_DIR"
 
-for ABI in "${!PLATFORMS[@]}"; do
-    ZIP_NAME="${PLATFORMS[$ABI]}"
-    URL="https://github.com/XTLS/Xray-core/releases/latest/download/${ZIP_NAME}.zip"
-    echo "Downloading $ZIP_NAME for $ABI..."
-    
-    mkdir -p "$JNILIBS_DIR/$ABI"
-    wget -q "$URL" -O "/tmp/xray-$ABI.zip"
-    unzip -o "/tmp/xray-$ABI.zip" xray -d "$JNILIBS_DIR/$ABI/"
-    mv "$JNILIBS_DIR/$ABI/xray" "$JNILIBS_DIR/$ABI/libxray.so"
-    rm "/tmp/xray-$ABI.zip"
-    echo "Done: $ABI"
-done
-
-echo "All Xray binaries placed in $JNILIBS_DIR"
-ls -la "$JNILIBS_DIR"/*/libxray.so
+URL="https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-arm32-v7a.zip"
+echo "Downloading Xray for armeabi-v7a..."
+wget -q "$URL" -O /tmp/xray.zip
+unzip -o /tmp/xray.zip xray -d "$ASSETS_DIR/"
+rm /tmp/xray.zip
+ls -lh "$ASSETS_DIR/xray"
+echo "Done"
