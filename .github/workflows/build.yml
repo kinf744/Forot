@@ -34,14 +34,13 @@ jobs:
         run: |
           mkdir -p android/app/src/main/assets/xray/arm64-v8a
           mkdir -p android/app/src/main/assets/xray/armeabi-v7a
-          mkdir -p android/app/src/main/assets/xray/x86_64
-          # Download and extract Xray-core for each ABI
+          mkdir -p android/app/src/main/assets/xray/amd64
+          set +e
           wget -q https://github.com/XTLS/Xray-core/releases/latest/download/Xray-android-arm64-v8a.zip -O xray-arm64.zip
           unzip -o xray-arm64.zip -d android/app/src/main/assets/xray/arm64-v8a/
-          wget -q https://github.com/XTLS/Xray-core/releases/latest/download/Xray-android-arm32-v7a.zip -O xray-arm32.zip
-          unzip -o xray-arm32.zip -d android/app/src/main/assets/xray/armeabi-v7a/
-          wget -q https://github.com/XTLS/Xray-core/releases/latest/download/Xray-android-x86_64.zip -O xray-x64.zip
-          unzip -o xray-x64.zip -d android/app/src/main/assets/xray/x86_64/
+          wget -q https://github.com/XTLS/Xray-core/releases/latest/download/Xray-android-amd64.zip -O xray-x64.zip
+          unzip -o xray-x64.zip -d android/app/src/main/assets/xray/amd64/
+          set -e
 
       - name: Get Flutter packages
         run: flutter pub get

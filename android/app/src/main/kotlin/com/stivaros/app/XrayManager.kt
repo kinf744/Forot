@@ -185,7 +185,11 @@ class XrayManager(private val context: Context) {
             Log.i(TAG, "Using libxray.so from native lib dir")
             return libxray
         }
-        val abi = android.os.Build.SUPPORTED_ABIS[0]
+        val abi = when (android.os.Build.SUPPORTED_ABIS[0]) {
+            "x86_64", "x86" -> "amd64"
+            "armeabi-v7a" -> "arm64-v8a"
+            else -> android.os.Build.SUPPORTED_ABIS[0]
+        }
         val target = File(context.filesDir, "xray")
         return try {
             context.assets.open("xray/$abi/xray").use { inp ->
