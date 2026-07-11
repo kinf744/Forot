@@ -1,9 +1,11 @@
 package com.stivaros.app
 
+import android.app.usage.NetworkStatsManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.TrafficStats
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -120,6 +122,15 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             }
             "getHardwareId" -> {
                 result.success(ActivationHelper.getHardwareId(context))
+            }
+            "getTrafficStats" -> {
+                try {
+                    val rxBytes = TrafficStats.getTotalRxBytes()
+                    val txBytes = TrafficStats.getTotalTxBytes()
+                    result.success(mapOf("rxBytes" to rxBytes, "txBytes" to txBytes))
+                } catch (e: Exception) {
+                    result.success(mapOf("rxBytes" to 0L, "txBytes" to 0L))
+                }
             }
             else -> result.notImplemented()
         }

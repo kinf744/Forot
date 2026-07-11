@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import '../models/user.dart';
 import '../models/server_config.dart';
@@ -16,6 +17,19 @@ class AppProvider extends ChangeNotifier {
   String _hardwareId = '';
   String _deviceId = '';
   StreamSubscription? _statusSubscription;
+  StreamSubscription? _trafficSubscription;
+
+  int _rxBytes = 0;
+  int _txBytes = 0;
+  int _rxBaseline = 0;
+  int _txBaseline = 0;
+  int _rxSpeed = 0;
+  int _txSpeed = 0;
+
+  int get rxBytes => _rxBytes;
+  int get txBytes => _txBytes;
+  int get rxSpeed => _rxSpeed;
+  int get txSpeed => _txSpeed;
 
   User? get user => _user;
   ServerConfig? get serverConfig => _serverConfig;
@@ -129,7 +143,10 @@ class AppProvider extends ChangeNotifier {
       shortId: _serverConfig!.shortId ?? '',
     );
 
-    if (!success) {
+    if (success) {
+      await _recordBaseline();
+      _startTrafficPolling();
+    } else {
       _connectionState = VpnState.error;
       _errorMessage = 'VPN connection failed';
       notifyListeners();
@@ -138,6 +155,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
+    _stopTrafficPolling();
     await VpnService.disconnect();
     _connectionState = VpnState.disconnected;
     notifyListeners();
@@ -159,9 +177,68 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  String formatBytes(int bytes, {bool bits = false}) {
+    if (bits) {
+      final b = bytes * 8;
+      if (b < 1000) return '${b}b';
+      if (b < 1000 * 1000) return '${(b / 1000).toStringAsFixed(1)}Kb';
+      if (b < 1000 * 1000 * 1000) return '${(b / (1000 * 1000)).toStringAsFixed(1)}Mb';
+      if (b < 1000 * 1000 * 1000 * 1000) return '${(b / (1000 * 1000 * 1000)).toStringAsFixed(2)}Gb';
+      return '${(b / (1000 * 1000 * 1000 * 1000)).toStringAsFixed(2)}Tb';
+    }
+    if (bytes < 1024) return '${bytes}B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)}KB';
+    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
+    if (bytes < 1024 * 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)}GB';
+    return '${(bytes / (1024 * 1024 * 1024 * 1024)).toStringAsFixed(2)}TB';
+  }
+
+  Future<void> _recordBaseline() async {
+    final stats = await VpnService.getTrafficStats();
+    _rxBaseline = (stats['rxBytes'] as int?) ?? 0;
+    _txBaseline = (stats['txBytes'] as int?) ?? 0;
+    _rxBytes = 0;
+    _txBytes = 0;
+  }
+
+  Future<void> _pollTraffic() async {
+    final stats = await VpnService.getTrafficStats();
+    final currentRx = (stats['rxBytes'] as int?) ?? 0;
+    final currentTx = (stats['txBytes'] as int?) ?? 0;
+
+    final totalRx = max(0, currentRx - _rxBaseline);
+    final totalTx = max(0, currentTx - _txBaseline);
+
+    _rxSpeed = totalRx - _rxBytes;
+    _txSpeed = totalTx - _txBytes;
+
+    _rxBytes = totalRx;
+    _txBytes = totalTx;
+
+    notifyListeners();
+  }
+
+  void _startTrafficPolling() {
+    _trafficSubscription?.cancel();
+    _pollTraffic();
+    _trafficSubscription = Stream.periodic(const Duration(seconds: 1))
+        .listen((_) => _pollTraffic());
+  }
+
+  void _stopTrafficPolling() {
+    _trafficSubscription?.cancel();
+    _trafficSubscription = null;
+    _rxBytes = 0;
+    _txBytes = 0;
+    _rxSpeed = 0;
+    _txSpeed = 0;
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _statusSubscription?.cancel();
+    _trafficSubscription?.cancel();
     super.dispose();
   }
 }

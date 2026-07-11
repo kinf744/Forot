@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -5,8 +6,21 @@ import '../providers/app_provider.dart';
 import 'activation_screen.dart';
 import 'settings_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  Timer? _trafficTimer;
+
+  @override
+  void dispose() {
+    _trafficTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +48,6 @@ class HomeScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Connection status card
                 GestureDetector(
                   onTap: () {
                     HapticFeedback.heavyImpact();
@@ -77,23 +90,48 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
 
-                // Data usage (placeholder)
-                if (provider.isConnected) ...[
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                Text(
+                  _getStatusLabel(provider),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: _getStatusColor(provider),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      _buildStatCard('Download', '0 MB', Icons.arrow_downward, theme),
-                      const SizedBox(width: 24),
-                      _buildStatCard('Upload', '0 MB', Icons.arrow_upward, theme),
+                      const Icon(Icons.arrow_downward, size: 16, color: Colors.greenAccent),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${provider.formatBytes(provider.rxSpeed, bits: true)} ${provider.formatBytes(provider.rxBytes)}',
+                        style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'monospace'),
+                      ),
+                      const SizedBox(width: 16),
+                      const Text('-', style: TextStyle(color: Colors.white54)),
+                      const SizedBox(width: 16),
+                      const Icon(Icons.arrow_upward, size: 16, color: Colors.orangeAccent),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${provider.formatBytes(provider.txSpeed, bits: true)} ${provider.formatBytes(provider.txBytes)}',
+                        style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'monospace'),
+                      ),
                     ],
                   ),
-                ],
+                ),
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
 
-                // Server info
                 if (provider.serverConfig != null)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -116,7 +154,6 @@ class HomeScreen extends StatelessWidget {
 
                 const Spacer(),
 
-                // Logout
                 TextButton.icon(
                   onPressed: () => _showLogoutDialog(context, provider),
                   icon: const Icon(Icons.logout, color: Colors.redAccent),
@@ -170,22 +207,30 @@ class HomeScreen extends StatelessWidget {
     }
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon, ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: theme.colorScheme.secondary, size: 20),
-          const SizedBox(height: 4),
-          Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-        ],
-      ),
-    );
+  String _getStatusLabel(AppProvider provider) {
+    switch (provider.connectionState) {
+      case VpnState.connected:
+        return 'CONNECTED';
+      case VpnState.connecting:
+        return 'CONNECTING';
+      case VpnState.error:
+        return 'ERROR';
+      default:
+        return 'DISCONNECTED';
+    }
+  }
+
+  Color? _getStatusColor(AppProvider provider) {
+    switch (provider.connectionState) {
+      case VpnState.connected:
+        return const Color(0xFF00E676);
+      case VpnState.connecting:
+        return Colors.amber;
+      case VpnState.error:
+        return Colors.red;
+      default:
+        return Colors.white38;
+    }
   }
 
   void _showLogoutDialog(BuildContext context, AppProvider provider) {

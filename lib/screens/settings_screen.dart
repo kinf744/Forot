@@ -56,16 +56,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 16),
           _buildSection('Device Info', [
-            ListTile(
-              title: const Text('Hardware ID'),
-              subtitle: Text(
-                provider.hardwareId.length > 32
-                    ? '${provider.hardwareId.substring(0, 32)}...'
-                    : provider.hardwareId,
-                style: const TextStyle(fontSize: 12),
-              ),
-              dense: true,
-            ),
             if (provider.user != null) ...[
               ListTile(
                 title: const Text('UUID'),

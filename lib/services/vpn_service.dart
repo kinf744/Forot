@@ -69,6 +69,14 @@ class VpnService {
     }
   }
 
+  static Future<Map<String, dynamic>> getTrafficStats() async {
+    try {
+      return await _channel.invokeMethod('getTrafficStats') ?? {'rxBytes': 0, 'txBytes': 0};
+    } on PlatformException {
+      return {'rxBytes': 0, 'txBytes': 0};
+    }
+  }
+
   static Stream<String> get statusStream {
     return _statusChannel.receiveBroadcastStream().map((event) {
       final status = event['status'] as String? ?? 'DISCONNECTED';
