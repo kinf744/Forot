@@ -148,7 +148,7 @@ class APIHandler(BaseHTTPRequestHandler):
         path = parsed.path.rstrip("/")
         params = parse_qs(parsed.query)
 
-        if path == "/api/v1/devices/check/":
+        if path == "/api/v1/devices/check":
             device_id = params.get("device_id", [None])[0]
             if not device_id:
                 return self._send({"activated": False, "message": "Missing device_id"}, 400)
@@ -396,8 +396,8 @@ create_user() {
     code=$(tr -dc '0-9' < /dev/urandom | fold -w 6 | head -1)
 
     # Default server config
-    read -p "Server address [default: vpn.stivaros.app]: " server_addr
-    server_addr=${server_addr:-vpn.stivaros.app}
+    read -p "Server address [default: api-v1.kingom.ggff.net]: " server_addr
+    server_addr=${server_addr:-api-v1.kingom.ggff.net}
     read -p "Server port [default: 443]: " server_port
     server_port=${server_port:-443}
 

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = 'https://api.stivaros.app';
+  static const String baseUrl = 'https://api-v1.kingom.ggff.net';
   static const Duration timeout = Duration(seconds: 15);
 
   static Future<Map<String, dynamic>> verifyActivation({
