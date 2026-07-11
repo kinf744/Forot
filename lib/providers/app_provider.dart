@@ -39,6 +39,10 @@ class AppProvider extends ChangeNotifier {
   String get deviceId => _deviceId;
   bool get isActivated => _user != null;
   bool get isConnected => _connectionState == VpnState.connected;
+  String _modeLabel = '';
+  String _ispLabel = '';
+  String get modeLabel => _modeLabel;
+  String get ispLabel => _ispLabel;
 
   Future<void> init() async {
     _user = await StorageService.getUser();
@@ -79,6 +83,25 @@ class AppProvider extends ChangeNotifier {
       }
       notifyListeners();
     });
+  }
+
+  void setAutoConfig(ServerConfig config, String isp, String modeLabel) {
+    _serverConfig = config;
+    _ispLabel = isp;
+    _modeLabel = modeLabel;
+    final existing = _user;
+    _user = User(
+      uuid: existing?.uuid ?? _deviceId,
+      phoneNumber: existing?.phoneNumber ?? '',
+      activationCode: existing?.activationCode ?? '',
+      serverAddress: config.address,
+      serverPort: config.port,
+      serverProtocol: config.protocol,
+      serverTransport: config.transport,
+      serverTls: config.tls,
+      serverSni: config.sni,
+    );
+    notifyListeners();
   }
 
   Future<bool> activate({
@@ -128,19 +151,21 @@ class AppProvider extends ChangeNotifier {
       return false;
     }
 
+    final config = _serverConfig!;
     _connectionState = VpnState.connecting;
     notifyListeners();
 
     final success = await VpnService.connect(
-      address: _serverConfig!.address,
-      port: _serverConfig!.port,
+      address: config.address,
+      port: config.port,
       uuid: _user!.uuid,
-      protocol: _serverConfig!.protocol,
-      transport: _serverConfig!.transport,
-      tls: _serverConfig!.tls,
-      sni: _serverConfig!.sni,
-      publicKey: _serverConfig!.publicKey ?? '',
-      shortId: _serverConfig!.shortId ?? '',
+      protocol: config.protocol,
+      transport: config.transport,
+      tls: config.tls,
+      sni: config.sni,
+      publicKey: config.publicKey ?? '',
+      shortId: config.shortId ?? '',
+      flow: config.flow ?? (config.tls ? 'xtls-rprx-vision' : ''),
     );
 
     if (success) {
@@ -156,8 +181,15 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> disconnect() async {
     _stopTrafficPolling();
+    final configId = _serverConfig?.configId;
     await VpnService.disconnect();
+    if (configId != null) {
+      ApiService.deleteConfig(configId: configId);
+    }
+    _serverConfig = null;
     _connectionState = VpnState.disconnected;
+    _modeLabel = '';
+    _ispLabel = '';
     notifyListeners();
   }
 

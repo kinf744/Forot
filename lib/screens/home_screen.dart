@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import 'activation_screen.dart';
 import 'settings_screen.dart';
+import 'config_selection_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -54,7 +55,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     if (provider.isConnected) {
                       provider.disconnect();
                     } else if (provider.connectionState != VpnState.connecting) {
-                      provider.connect();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ConfigSelectionScreen()),
+                      );
                     }
                   },
                   child: AnimatedContainer(
@@ -100,6 +104,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: _getStatusColor(provider),
                   ),
                 ),
+                if (provider.modeLabel.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      '${provider.modeLabel} · ${provider.ispLabel.toUpperCase()}',
+                      style: const TextStyle(color: Colors.white38, fontSize: 12),
+                    ),
+                  ),
                 const SizedBox(height: 16),
 
                 Container(

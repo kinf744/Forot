@@ -7,6 +7,8 @@ class ServerConfig {
   final String sni;
   final String? publicKey;
   final String? shortId;
+  final String? flow;
+  final int? configId;
 
   ServerConfig({
     required this.address,
@@ -17,6 +19,8 @@ class ServerConfig {
     String? sni,
     this.publicKey,
     this.shortId,
+    this.flow,
+    this.configId,
   }) : sni = (sni == null || sni.isEmpty) ? address : sni;
 
   factory ServerConfig.fromJson(Map<String, dynamic> json) {
@@ -29,6 +33,8 @@ class ServerConfig {
       sni: json['sni'] ?? '',
       publicKey: json['public_key'],
       shortId: json['short_id'],
+      flow: json['flow'],
+      configId: json['config_id'],
     );
   }
 
@@ -41,5 +47,7 @@ class ServerConfig {
     'sni': sni,
     'public_key': publicKey,
     'short_id': shortId,
+    'flow': flow,
+    'config_id': configId,
   };
 }

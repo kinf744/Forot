@@ -70,7 +70,7 @@ install_api_server() {
     cat > "$API_DIR/server.py" << 'PYEOF'
 #!/usr/bin/env python3
 """Stivaros VPN API Server"""
-import json, sqlite3, os, sys
+import json, sqlite3, os, sys, urllib.request
 from datetime import datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
@@ -111,11 +111,37 @@ def init_db():
             sni TEXT,
             public_key TEXT DEFAULT '',
             short_id TEXT DEFAULT '',
+            isp TEXT DEFAULT '',
+            mode TEXT DEFAULT '',
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
+        CREATE INDEX IF NOT EXISTS idx_vpn_configs_user_isp_mode ON vpn_configs(user_id, isp, mode);
     """)
     conn.commit()
     conn.close()
+
+def detect_isp(ip):
+    """Detect ISP from IP address. Returns one of: mtn, orange, camtel, blue, unknown"""
+    try:
+        url = f"http://ip-api.com/json/{ip}?fields=isp,org"
+        req = urllib.request.Request(url, headers={"User-Agent": "Stivaros/1.0"})
+        resp = urllib.request.urlopen(req, timeout=5)
+        data = json.loads(resp.read().decode())
+        isp = (data.get("isp") or data.get("org") or "").lower()
+        if "mtn" in isp: return "mtn"
+        if "orange" in isp: return "orange"
+        if "camtel" in isp: return "camtel"
+        if "blue" in isp or "africell" in isp: return "blue"
+        if "vodafone" in isp: return "blue"
+        return "unknown"
+    except Exception:
+        return "unknown"
+
+MODE_CONFIGS = {
+    "normal": {"transport": "tcp", "flow": ""},
+    "bad": {"transport": "kcp", "flow": ""},
+    "speed": {"transport": "tcp", "flow": "xtls-rprx-vision"},
+}
 
 class APIHandler(BaseHTTPRequestHandler):
     def _send(self, data, status=200):
@@ -139,7 +165,7 @@ class APIHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Activation-Code")
         self.end_headers()
 
@@ -192,6 +218,60 @@ class APIHandler(BaseHTTPRequestHandler):
                     "short_id": cfg["short_id"] or ""
                 })
             return self._send({"success": False, "message": "No config assigned"}, 404)
+
+        elif path == "/api/v1/config/auto":
+            uuid = params.get("uuid", [None])[0]
+            code = params.get("code", [""])[0]
+            mode = params.get("mode", ["normal"])[0]
+            if mode not in ("normal", "bad", "speed"):
+                return self._send({"success": False, "message": "Invalid mode"}, 400)
+            user = self._get_user_by_uuid(uuid)
+            if not user or not user["active"]:
+                return self._send({"success": False, "message": "User not found or inactive"}, 404)
+            if user["activation_code"] != code:
+                return self._send({"success": False, "message": "Invalid activation code"}, 403)
+            exp = user["expires_at"]
+            if exp and datetime.fromisoformat(exp) < datetime.now():
+                return self._send({"success": False, "message": "Subscription expired"}, 403)
+
+            client_ip = self.client_address[0]
+            isp = detect_isp(client_ip)
+
+            conn = get_db()
+            cfg = conn.execute(
+                "SELECT * FROM vpn_configs WHERE user_id = ? AND isp = ? AND mode = ?",
+                (user["id"], isp, mode)
+            ).fetchone()
+            if not cfg:
+                cfg = conn.execute(
+                    "SELECT * FROM vpn_configs WHERE user_id = ? AND isp = ? AND mode = ''",
+                    (user["id"], isp)
+                ).fetchone()
+            if not cfg:
+                cfg = conn.execute(
+                    "SELECT * FROM vpn_configs WHERE user_id = ? AND isp = '' AND mode = ''",
+                    (user["id"],)
+                ).fetchone()
+            conn.close()
+
+            if cfg:
+                mode_cfg = MODE_CONFIGS.get(mode, MODE_CONFIGS["normal"])
+                return self._send({
+                    "success": True,
+                    "isp": isp,
+                    "mode": mode,
+                    "address": cfg["server_address"],
+                    "port": cfg["server_port"],
+                    "protocol": cfg["protocol"],
+                    "transport": mode_cfg["transport"],
+                    "tls": bool(cfg["tls"]),
+                    "sni": cfg["sni"] or cfg["server_address"],
+                    "flow": mode_cfg["flow"],
+                    "public_key": cfg["public_key"] or "",
+                    "short_id": cfg["short_id"] or "",
+                    "config_id": cfg["id"]
+                })
+            return self._send({"success": False, "message": "No config available"}, 404)
 
         elif path == "/api/v1/status":
             conn = get_db()
@@ -265,6 +345,21 @@ class APIHandler(BaseHTTPRequestHandler):
 
         else:
             return self._send({"error": "Not found"}, 404)
+
+    def do_DELETE(self):
+        parsed = urlparse(self.path)
+        path = parsed.path.rstrip("/")
+        if path.startswith("/api/v1/config/"):
+            parts = path.split("/")
+            config_id = parts[-1] if len(parts) > 0 else None
+            if config_id and config_id.isdigit():
+                conn = get_db()
+                conn.execute("DELETE FROM vpn_configs WHERE id = ?", (int(config_id),))
+                conn.commit()
+                conn.close()
+                return self._send({"success": True, "message": "Config deleted"})
+            return self._send({"success": False, "message": "Invalid config ID"}, 400)
+        return self._send({"error": "Not found"}, 404)
 
     def log_message(self, format, *args):
         sys.stderr.write("[%s] %s\n" % (self.log_date_time_string(), format % args))

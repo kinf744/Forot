@@ -87,4 +87,38 @@ class ApiService {
       return {'success': false, 'message': 'Network error: $e'};
     }
   }
+
+  static Future<Map<String, dynamic>> getAutoConfig({
+    required String uuid,
+    required String activationCode,
+    required String mode,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/config/auto').replace(
+        queryParameters: {'uuid': uuid, 'code': activationCode, 'mode': mode},
+      );
+      final response = await http.get(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      return {'success': false, 'message': body['message'] ?? 'Auto config failed (${response.statusCode})'};
+    } catch (e) {
+      return {'success': false, 'message': 'Network error: $e'};
+    }
+  }
+
+  static Future<void> deleteConfig({
+    required int configId,
+  }) async {
+    try {
+      await http.delete(
+        Uri.parse('$baseUrl/api/v1/config/$configId'),
+      ).timeout(timeout);
+    } catch (_) {}
+  }
 }

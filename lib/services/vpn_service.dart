@@ -25,6 +25,7 @@ class VpnService {
     String sni = '',
     String publicKey = '',
     String shortId = '',
+    String flow = '',
   }) async {
     try {
       final result = await _channel.invokeMethod('connect', {
@@ -37,6 +38,7 @@ class VpnService {
         'sni': sni,
         'publicKey': publicKey,
         'shortId': shortId,
+        'flow': flow,
       });
       return result == true;
     } on PlatformException {
