@@ -1,31 +1,23 @@
 #!/bin/bash
-# Helper script to download Xray binaries for all supported ABIs
 set -e
 
-XRAY_VERSION=${1:-latest}
-ASSETS_DIR="android/app/src/main/assets/xray"
-
+JNILIBS_DIR="android/app/src/main/jniLibs"
 declare -A PLATFORMS
 PLATFORMS["arm64-v8a"]="Xray-android-arm64-v8a"
-PLATFORMS["armeabi-v7a"]="Xray-android-arm32-v7a"
-PLATFORMS["x86_64"]="Xray-android-x86_64"
+PLATFORMS["x86_64"]="Xray-android-amd64"
 
 for ABI in "${!PLATFORMS[@]}"; do
     ZIP_NAME="${PLATFORMS[$ABI]}"
-    URL="https://github.com/XTLS/Xray-core/releases/${XRAY_VERSION}/download/${ZIP_NAME}.zip"
-    
+    URL="https://github.com/XTLS/Xray-core/releases/latest/download/${ZIP_NAME}.zip"
     echo "Downloading $ZIP_NAME for $ABI..."
-    mkdir -p "$ASSETS_DIR/$ABI"
     
-    if [[ "$XRAY_VERSION" == "latest" ]]; then
-        URL="https://github.com/XTLS/Xray-core/releases/latest/download/${ZIP_NAME}.zip"
-    fi
-    
-    wget -q "$URL" -O "/tmp/${ZIP_NAME}.zip"
-    unzip -o "/tmp/${ZIP_NAME}.zip" -d "$ASSETS_DIR/$ABI/"
-    rm "/tmp/${ZIP_NAME}.zip"
+    mkdir -p "$JNILIBS_DIR/$ABI"
+    wget -q "$URL" -O "/tmp/xray-$ABI.zip"
+    unzip -o "/tmp/xray-$ABI.zip" xray -d "$JNILIBS_DIR/$ABI/"
+    mv "$JNILIBS_DIR/$ABI/xray" "$JNILIBS_DIR/$ABI/libxray.so"
+    rm "/tmp/xray-$ABI.zip"
     echo "Done: $ABI"
 done
 
-echo "All Xray binaries downloaded to $ASSETS_DIR"
-ls -la "$ASSETS_DIR"/*/
+echo "All Xray binaries placed in $JNILIBS_DIR"
+ls -la "$JNILIBS_DIR"/*/libxray.so
