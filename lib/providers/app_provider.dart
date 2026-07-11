@@ -23,6 +23,10 @@ class AppProvider extends ChangeNotifier {
   String _currentTier = '150';
   int _retryCount = 0;
   static const int _maxRetries = 10;
+  DateTime? _connectionStartTime;
+  static const Duration _quotaThreshold = Duration(seconds: 120);
+  bool _quotaExhausted = false;
+  bool _isHandlingQuota = false;
 
   int _rxBytes = 0;
   int _txBytes = 0;
@@ -75,6 +79,7 @@ class AppProvider extends ChangeNotifier {
     _statusSubscription = VpnService.statusStream.listen((status) {
       switch (status) {
         case 'CONNECTED':
+          _connectionStartTime = DateTime.now();
           _retryCount = 0;
           _connectionState = VpnState.connected;
           break;
@@ -83,9 +88,17 @@ class AppProvider extends ChangeNotifier {
           break;
         case 'DISCONNECTED':
           _connectionState = VpnState.disconnected;
+          if (_quotaExhausted && !_isHandlingQuota) {
+            _isHandlingQuota = true;
+            _handleQuotaExhaustion().then((_) => _isHandlingQuota = false);
+          }
           break;
         case 'ERROR':
           _connectionState = VpnState.error;
+          if (_quotaExhausted && !_isHandlingQuota) {
+            _isHandlingQuota = true;
+            _handleQuotaExhaustion().then((_) => _isHandlingQuota = false);
+          }
           break;
       }
       notifyListeners();
@@ -97,37 +110,38 @@ class AppProvider extends ChangeNotifier {
     });
   }
 
-  Future<void> _handleError(String msg) async {
-    if (_connectionState != VpnState.connected && _connectionState != VpnState.connecting) {
-      return;
-    }
-    if (msg == 'HTTP_302') {
-      if (_currentTier == '150') {
-        _currentTier = '100';
-        _retryCount = 0;
-        _errorMessage = 'Basculement vers 100Mo...';
-        _connectionState = VpnState.connecting;
-        notifyListeners();
-        await _reconnectCurrentTier();
-      } else {
-        _retryCount++;
-        if (_retryCount >= _maxRetries) {
-          _errorMessage = 'Forfait épuisé. Réessayez plus tard.';
-          await disconnect();
-        } else {
-          _errorMessage = 'Tentative $_retryCount/$_maxRetries...';
-          _connectionState = VpnState.connecting;
-          notifyListeners();
-          await _reconnectCurrentTier();
-        }
-      }
-    } else {
-      _errorMessage = 'Erreur de connexion';
-      await disconnect();
+  bool _wasShortConnection() {
+    if (_connectionStartTime == null) return false;
+    return DateTime.now().difference(_connectionStartTime!) < _quotaThreshold;
+  }
+
+  void _detectQuotaExhaustion() {
+    if (_wasShortConnection()) {
+      _quotaExhausted = true;
     }
   }
 
-  Future<void> _reconnectCurrentTier() async {
+  Future<void> _handleQuotaExhaustion() async {
+    _quotaExhausted = false;
+    if (_currentTier == '150') {
+      _currentTier = '100';
+      _retryCount = 0;
+      _errorMessage = 'Basculement vers 100Mo...';
+    } else {
+      _retryCount++;
+      if (_retryCount >= _maxRetries) {
+        _errorMessage = 'Forfait épuisé. Réessayez plus tard.';
+        _connectionState = VpnState.disconnected;
+        _currentTier = '150';
+        _retryCount = 0;
+        notifyListeners();
+        return;
+      }
+      _errorMessage = 'Tentative $_retryCount/$_maxRetries...';
+    }
+    _connectionState = VpnState.connecting;
+    notifyListeners();
+
     if (_user == null) return;
     final result = await ApiService.getAutoConfig(
       uuid: _user!.uuid,
@@ -137,7 +151,10 @@ class AppProvider extends ChangeNotifier {
     );
     if (!(result['success'] == true)) {
       _errorMessage = 'Configuration indisponible';
-      await disconnect();
+      _connectionState = VpnState.disconnected;
+      _currentTier = '150';
+      _retryCount = 0;
+      notifyListeners();
       return;
     }
     final config = ServerConfig.fromJson(result);
@@ -161,6 +178,14 @@ class AppProvider extends ChangeNotifier {
       await _recordBaseline();
       _startTrafficPolling();
     }
+  }
+
+  Future<void> _handleError(String msg) async {
+    if (_connectionState != VpnState.connected && _connectionState != VpnState.connecting) {
+      return;
+    }
+    _errorMessage = 'Erreur de connexion';
+    await disconnect();
   }
 
   void setAutoConfig(ServerConfig config, String isp, String modeLabel, {String? tier}) {
@@ -233,6 +258,8 @@ class AppProvider extends ChangeNotifier {
     final config = _serverConfig!;
     _currentTier = '150';
     _retryCount = 0;
+    _connectionStartTime = null;
+    _quotaExhausted = false;
     _connectionState = VpnState.connecting;
     notifyListeners();
 
@@ -273,6 +300,9 @@ class AppProvider extends ChangeNotifier {
     _ispLabel = '';
     _currentTier = '150';
     _retryCount = 0;
+    _connectionStartTime = null;
+    _quotaExhausted = false;
+    _isHandlingQuota = false;
     notifyListeners();
   }
 

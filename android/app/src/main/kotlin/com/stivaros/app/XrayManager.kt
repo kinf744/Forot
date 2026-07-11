@@ -238,9 +238,6 @@ class XrayManager(private val context: Context) {
                         when {
                             lower.contains("started") && lower.contains("xray") ->
                                 Log.i(TAG, "Xray started")
-                            lower.contains("302") || lower.contains("http/") ||
-                            lower.contains("redirect") || lower.contains("captive") ->
-                                errorCallback?.invoke("HTTP_302")
                             (lower.contains("error") || lower.contains("fatal")) &&
                             !lower.contains("warning") && !lower.contains("deprecated") ->
                                 errorCallback?.invoke("XRAY_ERROR")
