@@ -12,6 +12,8 @@ class VpnService {
       return await _channel.invokeMethod('requestVpnPermission');
     } on PlatformException {
       return false;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -43,6 +45,8 @@ class VpnService {
       return result == true;
     } on PlatformException {
       return false;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -52,6 +56,8 @@ class VpnService {
       return result == true;
     } on PlatformException {
       return false;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -59,6 +65,8 @@ class VpnService {
     try {
       return await _channel.invokeMethod('getStatus') ?? 'DISCONNECTED';
     } on PlatformException {
+      return 'DISCONNECTED';
+    } catch (_) {
       return 'DISCONNECTED';
     }
   }
@@ -68,6 +76,8 @@ class VpnService {
       return await _channel.invokeMethod('getHardwareId') ?? '';
     } on PlatformException {
       return '';
+    } catch (_) {
+      return '';
     }
   }
 
@@ -75,6 +85,8 @@ class VpnService {
     try {
       return await _channel.invokeMethod('getTrafficStats') ?? {'rxBytes': 0, 'txBytes': 0};
     } on PlatformException {
+      return {'rxBytes': 0, 'txBytes': 0};
+    } catch (_) {
       return {'rxBytes': 0, 'txBytes': 0};
     }
   }

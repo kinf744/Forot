@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
@@ -20,7 +21,11 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _init() async {
     final provider = context.read<AppProvider>();
-    await provider.init();
+    try {
+      await provider.init().timeout(const Duration(seconds: 10));
+    } catch (_) {
+      // init failed — will still navigate below
+    }
     if (!mounted) return;
     await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;

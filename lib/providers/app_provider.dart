@@ -55,13 +55,17 @@ class AppProvider extends ChangeNotifier {
   String get ispLabel => _ispLabel;
 
   Future<void> init() async {
-    _user = await StorageService.getUser();
-    _serverConfig = await StorageService.getServerConfig();
-    _hardwareId = await VpnService.getHardwareId();
-    _deviceId = await StorageService.getString('device_uuid');
-    if (_deviceId.isEmpty) {
-      _deviceId = _generateUuid();
-      await StorageService.setString('device_uuid', _deviceId);
+    try {
+      _user = await StorageService.getUser();
+      _serverConfig = await StorageService.getServerConfig();
+      _hardwareId = await VpnService.getHardwareId();
+      _deviceId = await StorageService.getString('device_uuid');
+      if (_deviceId.isEmpty) {
+        _deviceId = _generateUuid();
+        await StorageService.setString('device_uuid', _deviceId);
+      }
+    } catch (_) {
+      // ignore init errors — app continues to activation screen
     }
     _listenStatus();
     notifyListeners();
