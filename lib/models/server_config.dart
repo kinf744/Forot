@@ -14,10 +14,10 @@ class ServerConfig {
     this.protocol = 'vless',
     this.transport = 'tcp',
     this.tls = true,
-    this.sni = '',
+    String? sni,
     this.publicKey,
     this.shortId,
-  }) : sni = sni.isEmpty ? address : sni;
+  }) : sni = (sni == null || sni.isEmpty) ? address : sni;
 
   factory ServerConfig.fromJson(Map<String, dynamic> json) {
     return ServerConfig(
