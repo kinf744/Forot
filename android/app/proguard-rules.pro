@@ -1,11 +1,10 @@
--keep class com.stivaros.app.** { *; }
--keepclassmembers class com.stivaros.app.** { *; }
--keep class org.json.** { *; }
-
 # Flutter
--keep class io.flutter.** { *; }
--keep class io.flutter.plugins.** { *; }
--dontwarn io.flutter.**
+-keep class io.flutter.app.** { *; }
+-keep class io.flutter.plugin.** { *; }
+-keep class io.flutter.util.** { *; }
+-keep class io.flutter.view.** { *; }
+-keep class io.flutter.embedding.** { *; }
+-keep class io.flutter.embedding.engine.** { *; }
 
-# Keep xray binary path
--keep class com.stivaros.app.XrayManager { *; }
+# Xray
+-keep class com.stivaros.app.** { *; }
