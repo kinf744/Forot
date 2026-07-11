@@ -192,33 +192,6 @@ class APIHandler(BaseHTTPRequestHandler):
                 })
             return self._send({"activated": False, "message": "Device not found or inactive"}, 404)
 
-        elif path.startswith("/api/v1/config/"):
-            uuid = path.split("/")[-1]
-            code = self.headers.get("X-Activation-Code", "")
-            user = self._get_user_by_uuid(uuid)
-            if not user or not user["active"]:
-                return self._send({"success": False, "message": "User not found or inactive"}, 404)
-            if user["activation_code"] != code:
-                return self._send({"success": False, "message": "Invalid activation code"}, 403)
-            conn = get_db()
-            cfg = conn.execute(
-                "SELECT * FROM vpn_configs WHERE user_id = ?", (user["id"],)
-            ).fetchone()
-            conn.close()
-            if cfg:
-                return self._send({
-                    "success": True,
-                    "address": cfg["server_address"],
-                    "port": cfg["server_port"],
-                    "protocol": cfg["protocol"],
-                    "transport": cfg["transport"],
-                    "tls": bool(cfg["tls"]),
-                    "sni": cfg["sni"] or cfg["server_address"],
-                    "public_key": cfg["public_key"] or "",
-                    "short_id": cfg["short_id"] or ""
-                })
-            return self._send({"success": False, "message": "No config assigned"}, 404)
-
         elif path == "/api/v1/config/auto":
             uuid = params.get("uuid", [None])[0]
             code = params.get("code", [""])[0]
@@ -272,6 +245,33 @@ class APIHandler(BaseHTTPRequestHandler):
                     "config_id": cfg["id"]
                 })
             return self._send({"success": False, "message": "No config available"}, 404)
+
+        elif path.startswith("/api/v1/config/") and path != "/api/v1/config/auto":
+            uuid = path.split("/")[-1]
+            code = self.headers.get("X-Activation-Code", "")
+            user = self._get_user_by_uuid(uuid)
+            if not user or not user["active"]:
+                return self._send({"success": False, "message": "User not found or inactive"}, 404)
+            if user["activation_code"] != code:
+                return self._send({"success": False, "message": "Invalid activation code"}, 403)
+            conn = get_db()
+            cfg = conn.execute(
+                "SELECT * FROM vpn_configs WHERE user_id = ?", (user["id"],)
+            ).fetchone()
+            conn.close()
+            if cfg:
+                return self._send({
+                    "success": True,
+                    "address": cfg["server_address"],
+                    "port": cfg["server_port"],
+                    "protocol": cfg["protocol"],
+                    "transport": cfg["transport"],
+                    "tls": bool(cfg["tls"]),
+                    "sni": cfg["sni"] or cfg["server_address"],
+                    "public_key": cfg["public_key"] or "",
+                    "short_id": cfg["short_id"] or ""
+                })
+            return self._send({"success": False, "message": "No config assigned"}, 404)
 
         elif path == "/api/v1/status":
             conn = get_db()
