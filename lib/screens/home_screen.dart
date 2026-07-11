@@ -14,12 +14,58 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  Timer? _trafficTimer;
+  int _connectionStep = 0;
+  String _stepMessage = '';
 
   @override
   void dispose() {
-    _trafficTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _startConnection(AppProvider provider) async {
+    HapticFeedback.heavyImpact();
+    if (provider.isConnected) {
+      provider.disconnect();
+      return;
+    }
+    if (provider.connectionState == VpnState.connecting) return;
+
+    setState(() {
+      _connectionStep = 1;
+      _stepMessage = 'Vérification du réseau...';
+    });
+    await Future.delayed(const Duration(milliseconds: 600));
+
+    if (provider.serverConfig == null) {
+      setState(() => _stepMessage = 'Détection de l\'opérateur...');
+      await provider.autoConfig();
+    } else {
+      setState(() => _stepMessage = 'Chargement de la configuration ${provider.ispLabel.toUpperCase()}...');
+      await Future.delayed(const Duration(milliseconds: 400));
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _connectionStep = 2;
+      _stepMessage = 'Connexion du tunnel VPN...';
+    });
+    await Future.delayed(const Duration(milliseconds: 400));
+
+    if (provider.serverConfig != null) {
+      final connected = await provider.connect();
+      if (!mounted) return;
+      if (connected) {
+        setState(() => _connectionStep = 0);
+      } else {
+        setState(() => _connectionStep = 0);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(provider.errorMessage.isNotEmpty ? provider.errorMessage : 'Échec de connexion'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -44,24 +90,14 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Consumer<AppProvider>(
         builder: (context, provider, _) {
-          return Center(
+          return Stack(
+            children: [
+              Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 GestureDetector(
-                  onTap: () async {
-                    HapticFeedback.heavyImpact();
-                    if (provider.isConnected) {
-                      provider.disconnect();
-                    } else if (provider.connectionState != VpnState.connecting) {
-                      if (provider.serverConfig == null) {
-                        await provider.autoConfig();
-                      }
-                      if (provider.serverConfig != null) {
-                        await provider.connect();
-                      }
-                    }
-                  },
+                  onTap: () => _startConnection(provider),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
                     width: 200,
@@ -175,8 +211,34 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 32),
               ],
             ),
-          );
-        },
+          ),
+          if (_connectionStep > 0)
+            Container(
+              color: Colors.black54,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E2C),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(
+                        width: 20, height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 16),
+                      Text(_stepMessage, style: const TextStyle(color: Colors.white, fontSize: 14)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+      },
       ),
     );
   }
