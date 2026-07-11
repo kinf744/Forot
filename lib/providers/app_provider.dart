@@ -143,11 +143,13 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
 
     if (_user == null) return;
+    _ispLabel = await ApiService.detectIsp();
     final result = await ApiService.getAutoConfig(
       uuid: _user!.uuid,
       activationCode: _user!.activationCode,
       mode: 'normal',
       tier: _currentTier,
+      isp: _ispLabel,
     );
     if (!(result['success'] == true)) {
       _errorMessage = 'Configuration indisponible';
@@ -239,16 +241,17 @@ class AppProvider extends ChangeNotifier {
   Future<bool> autoConfig() async {
     if (_user == null) return false;
     _modeLabel = 'Connexion';
+    _ispLabel = await ApiService.detectIsp();
     final result = await ApiService.getAutoConfig(
       uuid: _user!.uuid,
       activationCode: _user!.activationCode,
       mode: 'normal',
       tier: '150',
+      isp: _ispLabel,
     );
     if (result['success'] != true) return false;
     final config = ServerConfig.fromJson(result);
     _serverConfig = config;
-    _ispLabel = result['isp'] as String? ?? 'unknown';
     _modeLabel = '150Mo';
     _currentTier = '150';
     await StorageService.saveServerConfig(config);

@@ -206,8 +206,10 @@ class APIHandler(BaseHTTPRequestHandler):
             if exp and datetime.fromisoformat(exp) < datetime.now():
                 return self._send({"success": False, "message": "Subscription expired"}, 403)
 
-            client_ip = self.client_address[0]
-            isp = detect_isp(client_ip)
+            isp = params.get("isp", [None])[0]
+            if not isp:
+                client_ip = self.headers.get("X-Real-IP") or self.headers.get("X-Forwarded-For", "").split(",")[0].strip() or self.client_address[0]
+                isp = detect_isp(client_ip)
 
             conn = get_db()
             cfg = conn.execute(

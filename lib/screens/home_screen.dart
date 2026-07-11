@@ -34,22 +34,25 @@ class _HomeScreenState extends State<HomeScreen> {
       _connectionStep = 1;
       _stepMessage = 'Vérification du réseau...';
     });
-    await Future.delayed(const Duration(milliseconds: 600));
+    await Future.delayed(const Duration(milliseconds: 500));
 
-    if (provider.serverConfig == null) {
-      setState(() => _stepMessage = 'Détection de l\'opérateur...');
-      await provider.autoConfig();
-    } else {
-      setState(() => _stepMessage = 'Chargement de la configuration ${provider.ispLabel.toUpperCase()}...');
-      await Future.delayed(const Duration(milliseconds: 400));
-    }
+    setState(() => _stepMessage = 'Détection de l\'opérateur...');
+    await provider.autoConfig();
 
     if (!mounted) return;
+    if (provider.serverConfig == null) {
+      setState(() => _connectionStep = 0);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Aucune configuration disponible'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
     setState(() {
       _connectionStep = 2;
       _stepMessage = 'Connexion du tunnel VPN...';
     });
-    await Future.delayed(const Duration(milliseconds: 400));
+    await Future.delayed(const Duration(milliseconds: 300));
 
     if (provider.serverConfig != null) {
       final connected = await provider.connect();
