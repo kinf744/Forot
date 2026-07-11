@@ -503,11 +503,21 @@ create_user() {
 INSERT INTO users (uuid, phone, name, activation_code, expires_at, active)
 VALUES ('$uuid', '$phone', '$name', '$code', '$expires', 1);
 
-INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni)
-VALUES (
-    (SELECT id FROM users WHERE uuid='$uuid'),
-    '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr'
-);
+-- Default config (used as fallback)
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', '', '');
+
+-- ISP-specific configs (same server, different optimizations per ISP if needed)
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', 'mtn', '');
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', 'orange', '');
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', 'camtel', '');
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', 'blue', '');
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', 'unknown', '');
 EOF
 
     echo
