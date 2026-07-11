@@ -59,13 +59,19 @@ class AppProvider extends ChangeNotifier {
       _user = await StorageService.getUser();
       _serverConfig = await StorageService.getServerConfig();
       _hardwareId = await VpnService.getHardwareId();
+    } catch (_) {
+      // ignore non-critical init errors
+    }
+    try {
       _deviceId = await StorageService.getString('device_uuid');
       if (_deviceId.isEmpty) {
         _deviceId = _generateUuid();
         await StorageService.setString('device_uuid', _deviceId);
       }
     } catch (_) {
-      // ignore init errors — app continues to activation screen
+      if (_deviceId.isEmpty) {
+        _deviceId = _generateUuid();
+      }
     }
     _listenStatus();
     notifyListeners();
