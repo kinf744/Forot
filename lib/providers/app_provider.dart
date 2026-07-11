@@ -56,7 +56,6 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> init() async {
     _user = await StorageService.getUser();
-    _serverConfig = await StorageService.getServerConfig();
     _hardwareId = await VpnService.getHardwareId();
     _deviceId = await StorageService.getString('device_uuid');
     if (_deviceId.isEmpty) {
@@ -220,25 +219,13 @@ class AppProvider extends ChangeNotifier {
     );
 
     if (result['success'] == true) {
-      final serverData = result['server'] as Map<String, dynamic>?;
-      _serverConfig = serverData != null ? ServerConfig.fromJson(serverData) : null;
-
       _user = User(
         uuid: _deviceId,
         phoneNumber: phoneNumber,
         activationCode: activationCode,
-        serverAddress: _serverConfig?.address,
-        serverPort: _serverConfig?.port,
-        serverProtocol: _serverConfig?.protocol,
-        serverTransport: _serverConfig?.transport,
-        serverTls: _serverConfig?.tls,
-        serverSni: _serverConfig?.sni,
       );
 
       await StorageService.saveUser(_user!);
-      if (_serverConfig != null) {
-        await StorageService.saveServerConfig(_serverConfig!);
-      }
       notifyListeners();
       return true;
     } else {

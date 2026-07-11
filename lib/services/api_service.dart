@@ -93,10 +93,11 @@ class ApiService {
     required String uuid,
     required String activationCode,
     required String mode,
+    String tier = '150',
   }) async {
     try {
       final uri = Uri.parse('$baseUrl/api/v1/config/auto').replace(
-        queryParameters: {'uuid': uuid, 'code': activationCode, 'mode': mode},
+        queryParameters: {'uuid': uuid, 'code': activationCode, 'mode': mode, 'tier': tier},
       );
       final response = await http.get(
         uri,

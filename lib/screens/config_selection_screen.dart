@@ -28,11 +28,12 @@ class _ConfigSelectionScreenState extends State<ConfigSelectionScreen> {
     _statusMessage = 'Récupération de la configuration...';
     setState(() {});
 
-    final result = await ApiService.getAutoConfig(
-      uuid: provider.user!.uuid,
-      activationCode: provider.user!.activationCode,
-      mode: mode,
-    );
+      final result = await ApiService.getAutoConfig(
+        uuid: provider.user!.uuid,
+        activationCode: provider.user!.activationCode,
+        mode: mode,
+        tier: '150',
+      );
 
     if (!mounted) return;
 
