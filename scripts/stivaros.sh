@@ -360,11 +360,12 @@ create_user() {
         pause; return
     fi
 
+    read -p "Enter Name           : " name
     read -p "Enter Device UUID   : " uuid
     read -p "Enter Phone Number  : " phone
     read -p "Enter Expiration date (YYYY-MM-DD): " expires
 
-    if [[ -z "$uuid" || -z "$phone" || -z "$expires" ]]; then
+    if [[ -z "$name" || -z "$uuid" || -z "$phone" || -z "$expires" ]]; then
         error "All fields are required"
         pause; return
     fi
@@ -378,9 +379,12 @@ create_user() {
     read -p "Server port [default: 443]: " server_port
     server_port=${server_port:-443}
 
+    # Add name column if not exists (migration)
+    sqlite3 "$DB_PATH" "ALTER TABLE users ADD COLUMN name TEXT DEFAULT '';" 2>/dev/null || true
+
     sqlite3 "$DB_PATH" << EOF
-INSERT INTO users (uuid, phone, activation_code, expires_at, active)
-VALUES ('$uuid', '$phone', '$code', '$expires', 1);
+INSERT INTO users (uuid, phone, name, activation_code, expires_at, active)
+VALUES ('$uuid', '$phone', '$name', '$code', '$expires', 1);
 
 INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni)
 VALUES (
@@ -391,12 +395,12 @@ EOF
 
     echo
     echo -e "${GREEN}══════════════════════════════════════${NC}"
-    echo -e "${GREEN}  User created successfully!${NC}"
-    echo -e "${CYAN}  UUID : $uuid${NC}"
-    echo -e "${CYAN}  Phone: $phone${NC}"
-    echo -e "${CYAN}  Code : $code${NC}"
-    echo -e "${CYAN}  Expires: $expires${NC}"
-    echo -e "${YELLOW}  Give this code to the user for activation${NC}"
+    echo "  ✅ Customer created!"
+    echo
+    echo "  • Name: $name"
+    echo "  • Number: $phone"
+    echo "  • UUID: $uuid"
+    echo "  • Activation code: $code"
     echo -e "${GREEN}══════════════════════════════════════${NC}"
     pause
 }
@@ -414,11 +418,11 @@ list_users() {
         pause; return
     fi
 
-    printf "${CYAN}%-4s | %-36s | %-16s | %-12s | %s${NC}\n" "#" "UUID" "Phone" "Expires" "Status"
-    printf -- "-----|--------------------------------------|------------------|--------------|--------\n"
+    printf "${CYAN}%-4s | %-16s | %-36s | %-16s | %-12s | %s${NC}\n" "#" "Name" "UUID" "Phone" "Expires" "Status"
+    printf -- "-----|------------------|--------------------------------------|------------------|--------------|--------\n"
 
     local i=0
-    while IFS='|' read -r id uuid phone expires active; do
+    while IFS='|' read -r id name uuid phone expires active; do
         i=$((i+1))
         local status
         if [[ "$active" -eq 0 ]]; then
@@ -428,8 +432,8 @@ list_users() {
         else
             status="${GREEN}active${NC}"
         fi
-        printf "%-4s | %-36s | %-16s | %-12s | %b\n" "$id" "$uuid" "$phone" "$expires" "$status"
-    done < <(sqlite3 "$DB_PATH" "SELECT id, uuid, phone, expires_at, active FROM users ORDER BY id;")
+        printf "%-4s | %-16s | %-36s | %-16s | %-12s | %b\n" "$id" "$name" "$uuid" "$phone" "$expires" "$status"
+    done < <(sqlite3 "$DB_PATH" "SELECT id, COALESCE(name,''), uuid, phone, expires_at, active FROM users ORDER BY id;")
 
     if [[ $i -eq 0 ]]; then
         warn "No users found"
