@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import 'activation_screen.dart';
 import 'settings_screen.dart';
-import 'config_selection_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
