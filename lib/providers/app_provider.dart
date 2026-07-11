@@ -73,14 +73,22 @@ class AppProvider extends ChangeNotifier {
         _deviceId = _generateUuid();
       }
     }
+    if (_deviceId.isEmpty) {
+      _deviceId = _generateUuid();
+    }
     _listenStatus();
     notifyListeners();
   }
 
   String _generateUuid() {
-    final seed = _hardwareId.hashCode;
-    final rng = Random(seed);
-    String hex(int len) => rng.nextInt(1 << (len * 4)).toRadixString(16).padLeft(len, '0');
+    final rng = Random(_hardwareId.hashCode);
+    String hex(int len) {
+      int v = 0;
+      for (int i = 0; i < len; i++) {
+        v = (v << 4) | rng.nextInt(16);
+      }
+      return v.toRadixString(16).padLeft(len, '0');
+    }
     return '${hex(8)}-${hex(4)}-4${hex(3)}-${'89ab'[rng.nextInt(4)]}${hex(3)}-${hex(12)}';
   }
 
