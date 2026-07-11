@@ -11,7 +11,7 @@ class ApiService {
     const p6 = ':5443';
     return '$p1$p2$p3$p4$p5$p6';
   }
-  static const Duration timeout = Duration(seconds: 15);
+  static const Duration timeout = Duration(seconds: 30);
 
   static Future<Map<String, dynamic>> verifyActivation({
     required String uuid,
@@ -41,7 +41,11 @@ class ApiService {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       return {'success': false, 'message': body['message'] ?? 'Activation failed (${response.statusCode})'};
     } catch (e) {
-      return {'success': false, 'message': 'Network error: $e'};
+      final msg = e.toString();
+      if (msg.contains('TimeoutException')) {
+        return {'success': false, 'message': 'Délai d\'attente dépassé. Vérifiez votre connexion internet.'};
+      }
+      return {'success': false, 'message': 'Erreur réseau: $e'};
     }
   }
 
@@ -61,7 +65,11 @@ class ApiService {
       }
       return {'activated': false, 'message': 'Not activated (${response.statusCode})'};
     } catch (e) {
-      return {'activated': false, 'message': 'Network error: $e'};
+      final msg = e.toString();
+      if (msg.contains('TimeoutException')) {
+        return {'activated': false, 'message': 'Délai d\'attente dépassé. Vérifiez votre connexion internet.'};
+      }
+      return {'activated': false, 'message': 'Erreur réseau: $e'};
     }
   }
 
@@ -85,7 +93,11 @@ class ApiService {
       }
       return {'success': false, 'message': 'Failed to get config (${response.statusCode})'};
     } catch (e) {
-      return {'success': false, 'message': 'Network error: $e'};
+      final msg = e.toString();
+      if (msg.contains('TimeoutException')) {
+        return {'success': false, 'message': 'Délai d\'attente dépassé. Vérifiez votre connexion internet.'};
+      }
+      return {'success': false, 'message': 'Erreur réseau: $e'};
     }
   }
 
@@ -110,7 +122,11 @@ class ApiService {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       return {'success': false, 'message': body['message'] ?? 'Auto config failed (${response.statusCode})'};
     } catch (e) {
-      return {'success': false, 'message': 'Network error: $e'};
+      final msg = e.toString();
+      if (msg.contains('TimeoutException')) {
+        return {'success': false, 'message': 'Délai d\'attente dépassé. Vérifiez votre connexion internet.'};
+      }
+      return {'success': false, 'message': 'Erreur réseau: $e'};
     }
   }
 

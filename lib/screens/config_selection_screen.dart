@@ -25,21 +25,30 @@ class _ConfigSelectionScreenState extends State<ConfigSelectionScreen> {
     final provider = context.read<AppProvider>();
     if (provider.user == null) return;
 
-    _statusMessage = 'Récupération de la configuration...';
+    _statusMessage = 'Détection de l\'opérateur...';
+    setState(() {});
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    _statusMessage = 'Génération de la configuration...';
     setState(() {});
 
-      final result = await ApiService.getAutoConfig(
-        uuid: provider.user!.uuid,
-        activationCode: provider.user!.activationCode,
-        mode: mode,
-        tier: '150',
-      );
+    final result = await ApiService.getAutoConfig(
+      uuid: provider.user!.uuid,
+      activationCode: provider.user!.activationCode,
+      mode: mode,
+      tier: '150',
+    );
 
     if (!mounted) return;
 
     if (result['success'] == true) {
       final serverConfig = ServerConfig.fromJson(result);
-      provider.setAutoConfig(serverConfig, result['isp'] as String? ?? 'unknown', label);
+      final isp = result['isp'] as String? ?? 'unknown';
+      provider.setAutoConfig(serverConfig, isp, label);
+
+      _statusMessage = 'Opérateur détecté : ${isp.toUpperCase()}';
+      setState(() {});
+      await Future.delayed(const Duration(milliseconds: 800));
 
       _statusMessage = 'Connexion VPN...';
       setState(() {});
