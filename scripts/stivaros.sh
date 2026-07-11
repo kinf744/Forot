@@ -220,6 +220,8 @@ class APIHandler(BaseHTTPRequestHandler):
                 return self._send({"success": False, "message": "Device not registered. Contact admin."}, 404)
             if user["activation_code"] != code:
                 return self._send({"success": False, "message": "Invalid activation code"}, 403)
+            if user["phone"] != phone:
+                return self._send({"success": False, "message": "Phone number does not match"}, 403)
             if not user["active"]:
                 return self._send({"success": False, "message": "Device is disabled"}, 403)
 
@@ -232,13 +234,31 @@ class APIHandler(BaseHTTPRequestHandler):
                 (uuid, hwid, body.get("app_version", ""), uuid)
             )
             conn.commit()
+
+            cfg = conn.execute(
+                "SELECT * FROM vpn_configs WHERE user_id = ?", (user["id"],)
+            ).fetchone()
             conn.close()
+
+            server_data = None
+            if cfg:
+                server_data = {
+                    "address": cfg["server_address"],
+                    "port": cfg["server_port"],
+                    "protocol": cfg["protocol"],
+                    "transport": cfg["transport"],
+                    "tls": bool(cfg["tls"]),
+                    "sni": cfg["sni"] or cfg["server_address"],
+                    "public_key": cfg["public_key"] or "",
+                    "short_id": cfg["short_id"] or ""
+                }
 
             return self._send({
                 "success": True,
                 "message": "Device activated successfully",
                 "phone": phone,
-                "expires_at": exp
+                "expires_at": exp,
+                "server": server_data
             })
 
         else:
