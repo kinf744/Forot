@@ -4,9 +4,11 @@ import android.content.Context
 import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
+import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.URL
 
 class XrayManager(private val context: Context) {
 
@@ -179,15 +181,40 @@ class XrayManager(private val context: Context) {
 
     private fun extractXrayBinary(): File? {
         val target = File(context.filesDir, "xray")
+        if (target.exists()) {
+            target.setExecutable(true)
+            Log.i(TAG, "Using cached Xray binary")
+            return target
+        }
         return try {
-            context.assets.open("xray/xray").use { inp ->
-                target.outputStream().use { out -> inp.copyTo(out) }
+            Log.i(TAG, "Downloading Xray binary...")
+            val url = URL("https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-arm32-v7a.zip")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.connectTimeout = 30000
+            conn.readTimeout = 60000
+            conn.inputStream.use { zipInput ->
+                val zipBytes = zipInput.readBytes()
+                val tempZip = File(context.cacheDir, "xray.zip")
+                tempZip.writeBytes(zipBytes)
+
+                val zis = java.util.zip.ZipInputStream(tempZip.inputStream())
+                var entry = zis.nextEntry
+                while (entry != null) {
+                    if (entry.name == "xray") {
+                        target.outputStream().use { out -> zis.copyTo(out) }
+                        break
+                    }
+                    entry = zis.nextEntry
+                }
+                zis.closeEntry()
+                zis.close()
+                tempZip.delete()
             }
             target.setExecutable(true)
-            Log.i(TAG, "Xray extracted from assets to ${target.absolutePath}")
+            Log.i(TAG, "Xray downloaded to ${target.absolutePath}")
             target
         } catch (e: Exception) {
-            Log.e(TAG, "Xray binary not found: ${e.message}")
+            Log.e(TAG, "Xray download failed: ${e.message}")
             null
         }
     }
