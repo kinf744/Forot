@@ -144,14 +144,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: _getStatusColor(provider),
                   ),
                 ),
-                if (provider.modeLabel.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      '${provider.modeLabel} · ${provider.ispLabel.toUpperCase()} · ${provider.serverConfig?.sni ?? provider.serverConfig?.address ?? ""}',
-                      style: const TextStyle(color: Colors.white38, fontSize: 12),
-                    ),
-                  ),
                 const SizedBox(height: 16),
 
                 Container(
@@ -183,26 +175,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
 
                 const SizedBox(height: 24),
-
-                if (provider.serverConfig != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface.withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.dns, size: 16, color: theme.colorScheme.secondary),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${provider.serverConfig!.address}:${provider.serverConfig!.port}',
-                          style: const TextStyle(color: Colors.white70),
-                        ),
-                      ],
-                    ),
-                  ),
 
                 const Spacer(),
 
