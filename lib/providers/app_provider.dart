@@ -56,6 +56,7 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> init() async {
     _user = await StorageService.getUser();
+    _serverConfig = await StorageService.getServerConfig();
     _hardwareId = await VpnService.getHardwareId();
     _deviceId = await StorageService.getString('device_uuid');
     if (_deviceId.isEmpty) {
@@ -235,6 +236,26 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> autoConfig() async {
+    if (_user == null) return false;
+    _modeLabel = 'Connexion';
+    final result = await ApiService.getAutoConfig(
+      uuid: _user!.uuid,
+      activationCode: _user!.activationCode,
+      mode: 'normal',
+      tier: '150',
+    );
+    if (result['success'] != true) return false;
+    final config = ServerConfig.fromJson(result);
+    _serverConfig = config;
+    _ispLabel = result['isp'] as String? ?? 'unknown';
+    _modeLabel = '150Mo';
+    _currentTier = '150';
+    await StorageService.saveServerConfig(config);
+    notifyListeners();
+    return true;
+  }
+
   Future<bool> connect() async {
     if (_user == null || _serverConfig == null) {
       _errorMessage = 'Not activated';
@@ -290,6 +311,7 @@ class AppProvider extends ChangeNotifier {
     _connectionStartTime = null;
     _quotaExhausted = false;
     _isHandlingQuota = false;
+    StorageService.clearServerConfig();
     notifyListeners();
   }
 

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user.dart';
+import '../models/server_config.dart';
 
 class StorageService {
   static const _secure = FlutterSecureStorage();
@@ -30,6 +31,20 @@ class StorageService {
   static Future<void> setBool(String key, bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(key, value);
+  }
+
+  static Future<void> saveServerConfig(ServerConfig config) async {
+    await _secure.write(key: _keyConfig, value: jsonEncode(config.toJson()));
+  }
+
+  static Future<ServerConfig?> getServerConfig() async {
+    final data = await _secure.read(key: _keyConfig);
+    if (data == null) return null;
+    return ServerConfig.fromJson(jsonDecode(data) as Map<String, dynamic>);
+  }
+
+  static Future<void> clearServerConfig() async {
+    await _secure.delete(key: _keyConfig);
   }
 
   static Future<String> getString(String key, {String defaultValue = ''}) async {

@@ -16,6 +16,7 @@ class _ActivationScreenState extends State<ActivationScreen> {
   final _codeController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _loading = false;
+  String _statusMessage = '';
 
   @override
   void dispose() {
@@ -34,7 +35,10 @@ class _ActivationScreenState extends State<ActivationScreen> {
   Future<void> _activate() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _statusMessage = 'Activation en cours...';
+    });
 
     final provider = context.read<AppProvider>();
     final success = await provider.activate(
@@ -43,14 +47,49 @@ class _ActivationScreenState extends State<ActivationScreen> {
     );
 
     if (!mounted) return;
-    setState(() => _loading = false);
 
     if (success) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
+      setState(() => _statusMessage = 'Détection de l\'opérateur...');
+
+      final configOk = await provider.autoConfig();
+
+      if (!mounted) return;
+
+      if (configOk) {
+        setState(() => _statusMessage = 'Connexion VPN...');
+
+        final connected = await provider.connect();
+
+        if (!mounted) return;
+
+        if (connected) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
+        } else {
+          setState(() {
+            _loading = false;
+            _statusMessage = '';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(provider.errorMessage.isNotEmpty ? provider.errorMessage : 'Échec de connexion'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } else {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Configuration indisponible. Contactez l\'admin.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } else {
+      setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(provider.errorMessage),
@@ -167,7 +206,14 @@ class _ActivationScreenState extends State<ActivationScreen> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                           child: _loading
-                              ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                                    const SizedBox(width: 12),
+                                    Text(_statusMessage, style: const TextStyle(fontSize: 14, color: Colors.white)),
+                                  ],
+                                )
                               : const Text('Activate App', style: TextStyle(fontSize: 16, color: Colors.white)),
                         ),
                       ),

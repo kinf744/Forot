@@ -50,15 +50,17 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 GestureDetector(
-                  onTap: () {
+                  onTap: () async {
                     HapticFeedback.heavyImpact();
                     if (provider.isConnected) {
                       provider.disconnect();
                     } else if (provider.connectionState != VpnState.connecting) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const ConfigSelectionScreen()),
-                      );
+                      if (provider.serverConfig == null) {
+                        await provider.autoConfig();
+                      }
+                      if (provider.serverConfig != null) {
+                        await provider.connect();
+                      }
                     }
                   },
                   child: AnimatedContainer(
