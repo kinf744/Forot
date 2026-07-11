@@ -68,10 +68,10 @@ class AppProvider extends ChangeNotifier {
   }
 
   String _generateUuid() {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final r = now ^ (now << 21) ^ (now >> 8);
-    return '${r.toString().padLeft(8, '0')}-${_hardwareId.hashCode.toString().padLeft(8, '0')}'
-        '-${now.hashCode.toString().padLeft(8, '0')}-${_hardwareId.length.toString().padLeft(8, '0')}';
+    final seed = _hardwareId.hashCode;
+    final rng = Random(seed);
+    String hex(int len) => rng.nextInt(1 << (len * 4)).toRadixString(16).padLeft(len, '0');
+    return '${hex(8)}-${hex(4)}-4${hex(3)}-${'89ab'[rng.nextInt(4)]}${hex(3)}-${hex(12)}';
   }
 
   void _listenStatus() {
