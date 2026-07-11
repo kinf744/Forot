@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 
@@ -58,12 +59,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSection('Device Info', [
             if (provider.user != null) ...[
               ListTile(
-                title: const Text('UUID'),
+                title: const Text('Device ID / UUID'),
                 subtitle: Text(
-                  provider.user!.uuid.length > 32
-                      ? '${provider.user!.uuid.substring(0, 32)}...'
-                      : provider.user!.uuid,
-                  style: const TextStyle(fontSize: 12),
+                  provider.deviceId,
+                  style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.copy, size: 18),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: provider.deviceId));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('UUID copié'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
                 ),
                 dense: true,
               ),
