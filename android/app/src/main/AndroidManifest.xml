@@ -52,6 +52,9 @@
         </receiver>
 
         <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+        <meta-data
             android:name="stivaros.plugin.version"
             android:value="1.0.0" />
     </application>
