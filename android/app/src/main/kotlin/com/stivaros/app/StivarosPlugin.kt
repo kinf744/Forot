@@ -63,11 +63,11 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         activityBinding = null
     }
 
-    override fun onReattachedToActivityForConfig(binding: ActivityPluginBinding) {
+    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
         activityBinding = binding
     }
 
-    override fun onDetachedFromActivityForConfig() {
+    override fun onDetachedFromActivityForConfigChanges() {
         activityBinding = null
     }
 
