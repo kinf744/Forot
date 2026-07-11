@@ -206,7 +206,7 @@ class APIHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")
 
-        if path == "/api/v1/devices/register/":
+        if path == "/api/v1/devices/register":
             body = self._read_body()
             uuid = body.get("device_install_id") or body.get("uuid", "")
             phone = body.get("phone_number", "")
