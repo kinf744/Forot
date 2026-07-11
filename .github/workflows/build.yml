@@ -26,20 +26,13 @@ jobs:
           flutter-version: '3.16.0'
           channel: 'stable'
 
-      - name: Download Xray binaries
+      - name: Download Xray binary
         run: |
-          for abi in arm64-v8a armeabi-v7a x86_64; do
-            case "$abi" in
-              arm64-v8a) zip_name="Xray-android-arm64-v8a" ;;
-              armeabi-v7a) zip_name="Xray-android-arm32-v7a" ;;
-              x86_64) zip_name="Xray-android-amd64" ;;
-            esac
-            mkdir -p "android/app/src/main/jniLibs/$abi"
-            wget -q "https://github.com/XTLS/Xray-core/releases/latest/download/${zip_name}.zip" -O "/tmp/xray-$abi.zip"
-            unzip -o "/tmp/xray-$abi.zip" xray -d "android/app/src/main/jniLibs/$abi/"
-            mv "android/app/src/main/jniLibs/$abi/xray" "android/app/src/main/jniLibs/$abi/libxray.so" 2>/dev/null || true
-            rm "/tmp/xray-$abi.zip"
-          done
+          mkdir -p android/app/src/main/assets/xray
+          wget -q https://github.com/XTLS/Xray-core/releases/latest/download/Xray-android-arm64-v8a.zip -O /tmp/xray.zip
+          unzip -o /tmp/xray.zip xray -d android/app/src/main/assets/xray/
+          rm /tmp/xray.zip
+          ls -lh android/app/src/main/assets/xray/
 
       - name: Get Flutter packages
         run: flutter pub get

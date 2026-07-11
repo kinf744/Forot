@@ -178,21 +178,9 @@ class XrayManager(private val context: Context) {
     }
 
     private fun extractXrayBinary(): File? {
-        val nativeDir = context.applicationInfo.nativeLibraryDir
-        val libxray = File(nativeDir, "libxray.so")
-        if (libxray.exists()) {
-            libxray.setExecutable(true)
-            Log.i(TAG, "Using libxray.so from native lib dir")
-            return libxray
-        }
-        val abi = when (android.os.Build.SUPPORTED_ABIS[0]) {
-            "x86_64", "x86" -> "amd64"
-            "armeabi-v7a" -> "arm64-v8a"
-            else -> android.os.Build.SUPPORTED_ABIS[0]
-        }
         val target = File(context.filesDir, "xray")
         return try {
-            context.assets.open("xray/$abi/xray").use { inp ->
+            context.assets.open("xray/xray").use { inp ->
                 target.outputStream().use { out -> inp.copyTo(out) }
             }
             target.setExecutable(true)
