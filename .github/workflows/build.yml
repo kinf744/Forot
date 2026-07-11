@@ -1,0 +1,60 @@
+name: Build Stivaros APK
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.16.0'
+          channel: 'stable'
+
+      - name: Create keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/stivaros.keystore
+
+      - name: Download Xray binaries
+        run: |
+          mkdir -p android/app/src/main/assets/xray/arm64-v8a
+          mkdir -p android/app/src/main/assets/xray/armeabi-v7a
+          mkdir -p android/app/src/main/assets/xray/x86_64
+          # Download and extract Xray-core for each ABI
+          wget -q https://github.com/XTLS/Xray-core/releases/latest/download/Xray-android-arm64-v8a.zip -O xray-arm64.zip
+          unzip -o xray-arm64.zip -d android/app/src/main/assets/xray/arm64-v8a/
+          wget -q https://github.com/XTLS/Xray-core/releases/latest/download/Xray-android-arm32-v7a.zip -O xray-arm32.zip
+          unzip -o xray-arm32.zip -d android/app/src/main/assets/xray/armeabi-v7a/
+          wget -q https://github.com/XTLS/Xray-core/releases/latest/download/Xray-android-x86_64.zip -O xray-x64.zip
+          unzip -o xray-x64.zip -d android/app/src/main/assets/xray/x86_64/
+
+      - name: Get Flutter packages
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release --split-per-abi
+        env:
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: stivaros-apks
+          path: build/app/outputs/flutter-apk/*.apk
