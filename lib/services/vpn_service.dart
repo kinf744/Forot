@@ -20,7 +20,7 @@ class VpnService {
     required int port,
     required String uuid,
     String protocol = 'vless',
-    String transport = 'tcp',
+    String transport = 'xhttp',
     bool tls = true,
     String sni = '',
     String publicKey = '',

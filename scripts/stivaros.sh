@@ -140,9 +140,9 @@ def detect_isp(ip):
         return "unknown"
 
 MODE_CONFIGS = {
-    "normal": {"transport": "tcp", "flow": ""},
-    "bad": {"transport": "kcp", "flow": ""},
-    "speed": {"transport": "tcp", "flow": "xtls-rprx-vision"},
+    "normal": {"transport": "xhttp", "flow": ""},
+    "bad": {"transport": "xhttp", "flow": ""},
+    "speed": {"transport": "xhttp", "flow": ""},
 }
 
 class APIHandler(BaseHTTPRequestHandler):
@@ -512,19 +512,19 @@ VALUES ('$uuid', '$phone', '$name', '$code', '$expires', 1);
 
 -- Default config (used as fallback)
 INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, xray_uuid)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', '', '', '', '$xray_uuid');
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', '', '', '', '$xray_uuid');
 
 -- ISP-specific configs with dynamic SNI per carrier
 INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, xray_uuid)
 VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, 'mtnplay.com', 'mtn', '', '', '$xray_uuid');
 INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, xray_uuid)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', 'orange', '', '', '$xray_uuid');
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', 'orange', '', '', '$xray_uuid');
 INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, xray_uuid)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', 'camtel', '', '', '$xray_uuid');
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', 'camtel', '', '', '$xray_uuid');
 INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, xray_uuid)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', 'blue', '', '', '$xray_uuid');
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', 'blue', '', '', '$xray_uuid');
 INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, xray_uuid)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', 'unknown', '', '', '$xray_uuid');
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', 'unknown', '', '', '$xray_uuid');
 EOF
 
     echo

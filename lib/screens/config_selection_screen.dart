@@ -16,16 +16,16 @@ class _ConfigSelectionScreenState extends State<ConfigSelectionScreen> {
   bool _loading = false;
   String _statusMessage = '';
 
-  Future<void> _selectMode(String mode, String label) async {
+  Future<void> _connect(String mode, String label) async {
     setState(() {
       _loading = true;
-      _statusMessage = 'Detecting network...';
+      _statusMessage = 'Analyse du réseau...';
     });
 
     final provider = context.read<AppProvider>();
     if (provider.user == null) return;
 
-    _statusMessage = 'Analyzing ISP...';
+    _statusMessage = 'Récupération de la configuration...';
     setState(() {});
 
     final result = await ApiService.getAutoConfig(
@@ -40,7 +40,7 @@ class _ConfigSelectionScreenState extends State<ConfigSelectionScreen> {
       final serverConfig = ServerConfig.fromJson(result);
       provider.setAutoConfig(serverConfig, result['isp'] as String? ?? 'unknown', label);
 
-      _statusMessage = 'Connecting VPN...';
+      _statusMessage = 'Connexion VPN...';
       setState(() {});
 
       final connected = await provider.connect();
@@ -59,7 +59,7 @@ class _ConfigSelectionScreenState extends State<ConfigSelectionScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(provider.errorMessage.isNotEmpty ? provider.errorMessage : 'Connection failed'),
+            content: Text(provider.errorMessage.isNotEmpty ? provider.errorMessage : 'Échec de connexion'),
             backgroundColor: Colors.red,
           ),
         );
@@ -71,7 +71,7 @@ class _ConfigSelectionScreenState extends State<ConfigSelectionScreen> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result['message'] as String? ?? 'Failed to get config'),
+          content: Text(result['message'] as String? ?? 'Configuration indisponible'),
           backgroundColor: Colors.red,
         ),
       );
@@ -87,7 +87,7 @@ class _ConfigSelectionScreenState extends State<ConfigSelectionScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Select Mode'),
+        title: const Text('Connexion'),
       ),
       body: Stack(
         children: [
@@ -97,10 +97,10 @@ class _ConfigSelectionScreenState extends State<ConfigSelectionScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.speed, size: 64, color: theme.colorScheme.primary),
+                  Icon(Icons.wifi_tethering, size: 64, color: theme.colorScheme.primary),
                   const SizedBox(height: 16),
                   Text(
-                    'Choose connection mode',
+                    'Prêt à connecter',
                     style: theme.textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -108,34 +108,41 @@ class _ConfigSelectionScreenState extends State<ConfigSelectionScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'The app will detect your network and load the best config',
+                    'Détection automatique du réseau et configuration optimale',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.white54),
                   ),
                   const SizedBox(height: 32),
-
-                  _buildModeButton(
-                    icon: Icons.wifi,
-                    title: 'Normal',
-                    subtitle: 'Balanced performance',
-                    color: theme.colorScheme.primary,
-                    onTap: () => _selectMode('normal', 'Normal'),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildModeButton(
-                    icon: Icons.signal_wifi_off,
-                    title: 'Mauvaise réseau',
-                    subtitle: 'Optimized for weak signals',
-                    color: Colors.orange,
-                    onTap: () => _selectMode('bad', 'Mauvaise réseau'),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildModeButton(
-                    icon: Icons.flash_on,
-                    title: 'Vitesse max',
-                    subtitle: 'Maximum speed for stable networks',
-                    color: Colors.greenAccent,
-                    onTap: () => _selectMode('speed', 'Vitesse max'),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _loading ? null : () => _connect('normal', 'Connexion'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.greenAccent.withOpacity(0.15),
+                        foregroundColor: Colors.greenAccent,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(color: Colors.greenAccent.withOpacity(0.4)),
+                        ),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.power_settings_new, size: 28),
+                          SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Connexion', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                                Text('Démarrer le VPN', style: TextStyle(fontSize: 12, color: Colors.white54)),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.arrow_forward_ios, size: 16),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -164,46 +171,6 @@ class _ConfigSelectionScreenState extends State<ConfigSelectionScreen> {
               ),
             ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildModeButton({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: _loading ? null : onTap,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color.withOpacity(0.15),
-          foregroundColor: color,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: color.withOpacity(0.4)),
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 28),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                  Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.white54)),
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios, size: 16),
-          ],
-        ),
       ),
     );
   }
