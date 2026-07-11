@@ -40,7 +40,7 @@ class HomeScreen extends StatelessWidget {
                     HapticFeedback.heavyImpact();
                     if (provider.isConnected) {
                       provider.disconnect();
-                    } else if (provider.connectionState != ConnectionState.connecting) {
+                    } else if (provider.connectionState != VpnState.connecting) {
                       provider.connect();
                     }
                   },
@@ -53,7 +53,7 @@ class HomeScreen extends StatelessWidget {
                       gradient: _getGradient(provider, theme),
                       boxShadow: [
                         BoxShadow(
-                          color: _getShadowColor(provider, theme).withValues(alpha: 0.4),
+                          color: _getShadowColor(provider, theme).withOpacity(0.4),
                           blurRadius: 40,
                           spreadRadius: 10,
                         ),
@@ -98,7 +98,7 @@ class HomeScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.surface.withValues(alpha: 0.5),
+                      color: theme.colorScheme.surface.withOpacity(0.5),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
@@ -133,11 +133,11 @@ class HomeScreen extends StatelessWidget {
 
   Gradient _getGradient(AppProvider provider, ThemeData theme) {
     switch (provider.connectionState) {
-      case ConnectionState.connected:
+      case VpnState.connected:
         return LinearGradient(colors: [const Color(0xFF00E676), const Color(0xFF00BFA5)]);
-      case ConnectionState.connecting:
+      case VpnState.connecting:
         return LinearGradient(colors: [Colors.amber, Colors.orange]);
-      case ConnectionState.error:
+      case VpnState.error:
         return LinearGradient(colors: [Colors.red, Colors.deepOrange]);
       default:
         return LinearGradient(colors: [theme.colorScheme.primary, theme.colorScheme.secondary]);
@@ -146,11 +146,11 @@ class HomeScreen extends StatelessWidget {
 
   Color _getShadowColor(AppProvider provider, ThemeData theme) {
     switch (provider.connectionState) {
-      case ConnectionState.connected:
+      case VpnState.connected:
         return const Color(0xFF00E676);
-      case ConnectionState.connecting:
+      case VpnState.connecting:
         return Colors.amber;
-      case ConnectionState.error:
+      case VpnState.error:
         return Colors.red;
       default:
         return theme.colorScheme.primary;
@@ -159,11 +159,11 @@ class HomeScreen extends StatelessWidget {
 
   String _getStatusText(AppProvider provider) {
     switch (provider.connectionState) {
-      case ConnectionState.connected:
+      case VpnState.connected:
         return 'Connected';
-      case ConnectionState.connecting:
+      case VpnState.connecting:
         return 'Connecting...';
-      case ConnectionState.error:
+      case VpnState.error:
         return 'Error';
       default:
         return 'Tap to Connect';
@@ -174,7 +174,7 @@ class HomeScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withValues(alpha: 0.5),
+        color: theme.colorScheme.surface.withOpacity(0.5),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(

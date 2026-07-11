@@ -67,7 +67,7 @@ class _SplashScreenState extends State<SplashScreen> {
             Text(
               'Secure VPN',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.6),
+                    color: Colors.white.withOpacity(0.6),
                   ),
             ),
             const SizedBox(height: 32),

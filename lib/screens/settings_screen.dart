@@ -114,7 +114,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         Container(
           decoration: BoxDecoration(
-            color: theme.colorScheme.surface.withValues(alpha: 0.5),
+            color: theme.colorScheme.surface.withOpacity(0.5),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Column(children: tiles),

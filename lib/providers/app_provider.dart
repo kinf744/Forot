@@ -6,23 +6,23 @@ import '../services/vpn_service.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
 
-enum ConnectionState { disconnected, connecting, connected, error }
+enum VpnState { disconnected, connecting, connected, error }
 
 class AppProvider extends ChangeNotifier {
   User? _user;
   ServerConfig? _serverConfig;
-  ConnectionState _connectionState = ConnectionState.disconnected;
+  VpnState _connectionState = VpnState.disconnected;
   String _errorMessage = '';
   String _hardwareId = '';
   StreamSubscription? _statusSubscription;
 
   User? get user => _user;
   ServerConfig? get serverConfig => _serverConfig;
-  ConnectionState get connectionState => _connectionState;
+  VpnState get connectionState => _connectionState;
   String get errorMessage => _errorMessage;
   String get hardwareId => _hardwareId;
   bool get isActivated => _user != null;
-  bool get isConnected => _connectionState == ConnectionState.connected;
+  bool get isConnected => _connectionState == VpnState.connected;
 
   Future<void> init() async {
     _user = await StorageService.getUser();
@@ -37,16 +37,16 @@ class AppProvider extends ChangeNotifier {
     _statusSubscription = VpnService.statusStream.listen((status) {
       switch (status) {
         case 'CONNECTED':
-          _connectionState = ConnectionState.connected;
+          _connectionState = VpnState.connected;
           break;
         case 'CONNECTING':
-          _connectionState = ConnectionState.connecting;
+          _connectionState = VpnState.connecting;
           break;
         case 'DISCONNECTED':
-          _connectionState = ConnectionState.disconnected;
+          _connectionState = VpnState.disconnected;
           break;
         case 'ERROR':
-          _connectionState = ConnectionState.error;
+          _connectionState = VpnState.error;
           break;
       }
       notifyListeners();
@@ -101,7 +101,7 @@ class AppProvider extends ChangeNotifier {
       return false;
     }
 
-    _connectionState = ConnectionState.connecting;
+    _connectionState = VpnState.connecting;
     notifyListeners();
 
     final success = await VpnService.connect(
@@ -117,7 +117,7 @@ class AppProvider extends ChangeNotifier {
     );
 
     if (!success) {
-      _connectionState = ConnectionState.error;
+      _connectionState = VpnState.error;
       _errorMessage = 'VPN connection failed';
       notifyListeners();
     }
@@ -126,7 +126,7 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> disconnect() async {
     await VpnService.disconnect();
-    _connectionState = ConnectionState.disconnected;
+    _connectionState = VpnState.disconnected;
     notifyListeners();
   }
 
@@ -135,7 +135,7 @@ class AppProvider extends ChangeNotifier {
     await StorageService.clearAll();
     _user = null;
     _serverConfig = null;
-    _connectionState = ConnectionState.disconnected;
+    _connectionState = VpnState.disconnected;
     _errorMessage = '';
     notifyListeners();
   }
