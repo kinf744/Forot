@@ -158,7 +158,7 @@ class AppProvider extends ChangeNotifier {
     final success = await VpnService.connect(
       address: config.address,
       port: config.port,
-      uuid: _user!.uuid,
+      uuid: config.xrayUuid ?? _user!.uuid,
       protocol: config.protocol,
       transport: config.transport,
       tls: config.tls,

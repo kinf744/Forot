@@ -8,7 +8,8 @@ class ApiService {
     const p3 = '.kingom';
     const p4 = '.ggff';
     const p5 = '.net';
-    return '$p1$p2$p3$p4$p5';
+    const p6 = ':5443';
+    return '$p1$p2$p3$p4$p5$p6';
   }
   static const Duration timeout = Duration(seconds: 15);
 

@@ -9,6 +9,7 @@ class ServerConfig {
   final String? shortId;
   final String? flow;
   final int? configId;
+  final String? xrayUuid;
 
   ServerConfig({
     required this.address,
@@ -21,6 +22,7 @@ class ServerConfig {
     this.shortId,
     this.flow,
     this.configId,
+    this.xrayUuid,
   }) : sni = (sni == null || sni.isEmpty) ? address : sni;
 
   factory ServerConfig.fromJson(Map<String, dynamic> json) {
@@ -35,6 +37,7 @@ class ServerConfig {
       shortId: json['short_id'],
       flow: json['flow'],
       configId: json['config_id'],
+      xrayUuid: json['xray_uuid'],
     );
   }
 
@@ -49,5 +52,6 @@ class ServerConfig {
     'short_id': shortId,
     'flow': flow,
     'config_id': configId,
+    'xray_uuid': xrayUuid,
   };
 }

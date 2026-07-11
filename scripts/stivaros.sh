@@ -113,6 +113,8 @@ def init_db():
             short_id TEXT DEFAULT '',
             isp TEXT DEFAULT '',
             mode TEXT DEFAULT '',
+            flow TEXT DEFAULT '',
+            xray_uuid TEXT DEFAULT '6e3b3083-f69d-4c98-a6d8-a8134a6d99f6',
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
         CREATE INDEX IF NOT EXISTS idx_vpn_configs_user_isp_mode ON vpn_configs(user_id, isp, mode);
@@ -229,6 +231,8 @@ class APIHandler(BaseHTTPRequestHandler):
 
             if cfg:
                 mode_cfg = MODE_CONFIGS.get(mode, MODE_CONFIGS["normal"])
+                transport = cfg["transport"] if cfg["transport"] and cfg["transport"] != "tcp" else mode_cfg["transport"]
+                flow = cfg["flow"] if cfg["flow"] else mode_cfg["flow"]
                 return self._send({
                     "success": True,
                     "isp": isp,
@@ -236,13 +240,14 @@ class APIHandler(BaseHTTPRequestHandler):
                     "address": cfg["server_address"],
                     "port": cfg["server_port"],
                     "protocol": cfg["protocol"],
-                    "transport": mode_cfg["transport"],
+                    "transport": transport,
                     "tls": bool(cfg["tls"]),
                     "sni": cfg["sni"] or cfg["server_address"],
-                    "flow": mode_cfg["flow"],
+                    "flow": flow,
                     "public_key": cfg["public_key"] or "",
                     "short_id": cfg["short_id"] or "",
-                    "config_id": cfg["id"]
+                    "config_id": cfg["id"],
+                    "xray_uuid": cfg["xray_uuid"] or "6e3b3083-f69d-4c98-a6d8-a8134a6d99f6"
                 })
             return self._send({"success": False, "message": "No config available"}, 404)
 
@@ -491,10 +496,12 @@ create_user() {
     code=$(tr -dc '0-9' < /dev/urandom | fold -w 6 | head -1)
 
     # Default server config
-    read -p "Server address [default: api-v1.kingom.ggff.net]: " server_addr
-    server_addr=${server_addr:-api-v1.kingom.ggff.net}
+    read -p "Server address [default: kiaje2.kingom.ggff.net]: " server_addr
+    server_addr=${server_addr:-kiaje2.kingom.ggff.net}
     read -p "Server port [default: 443]: " server_port
     server_port=${server_port:-443}
+    read -p "Xray UUID [default: 6e3b3083-f69d-4c98-a6d8-a8134a6d99f6]: " xray_uuid
+    xray_uuid=${xray_uuid:-6e3b3083-f69d-4c98-a6d8-a8134a6d99f6}
 
     # Add name column if not exists (migration)
     sqlite3 "$DB_PATH" "ALTER TABLE users ADD COLUMN name TEXT DEFAULT '';" 2>/dev/null || true
@@ -504,20 +511,20 @@ INSERT INTO users (uuid, phone, name, activation_code, expires_at, active)
 VALUES ('$uuid', '$phone', '$name', '$code', '$expires', 1);
 
 -- Default config (used as fallback)
-INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', '', '');
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, xray_uuid)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', '', '', '', '$xray_uuid');
 
--- ISP-specific configs (same server, different optimizations per ISP if needed)
-INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', 'mtn', '');
-INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', 'orange', '');
-INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', 'camtel', '');
-INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', 'blue', '');
-INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', 'unknown', '');
+-- ISP-specific configs with dynamic SNI per carrier
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, xray_uuid)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, 'mtnplay.com', 'mtn', '', '', '$xray_uuid');
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, xray_uuid)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', 'orange', '', '', '$xray_uuid');
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, xray_uuid)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', 'camtel', '', '', '$xray_uuid');
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, xray_uuid)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', 'blue', '', '', '$xray_uuid');
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, xray_uuid)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'tcp', 1, '$server_addr', 'unknown', '', '', '$xray_uuid');
 EOF
 
     echo
@@ -675,6 +682,165 @@ uninstall_all() {
 }
 
 # ──────────────────────────────────────────────
+#  TUNNEL VPN Menu (Option 6)
+# ──────────────────────────────────────────────
+
+XRAY_DOMAIN="kiaje2.kingom.ggff.net"
+XRAY_PATH="/vless-xhttp"
+XRAY_UUID="6e3b3083-f69d-4c98-a6d8-a8134a6d99f6"
+
+xray_install() {
+    banner
+    echo -e "${BOLD}Install Xray Tunnel${NC}\n"
+
+    if ! command -v xray &>/dev/null; then
+        info "Downloading Xray-core..."
+        bash <(curl -fsSL https://raw.githubusercontent.com/XTLS/Xray-install/main/install-release.sh) 2>&1
+        msg "Xray binary installed"
+    else
+        msg "Xray already installed"
+    fi
+
+    setcap cap_net_bind_service=+ep /usr/local/bin/xray 2>/dev/null || true
+
+    mkdir -p /etc/xray
+
+    # Generate TLS cert if missing
+    if [[ ! -f /etc/xray/xray.key ]]; then
+        info "Generating self-signed TLS certificate for $XRAY_DOMAIN..."
+        openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
+            -keyout /etc/xray/xray.key -out /etc/xray/xray.crt \
+            -subj "/CN=$XRAY_DOMAIN" -days 36500 2>/dev/null
+        msg "TLS certificate generated"
+    fi
+
+    # Write Xray config
+    cat > /etc/xray/config.json << EOF
+{
+  "log": { "loglevel": "warning" },
+  "inbounds": [
+    {
+      "port": 443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [{"id": "$XRAY_UUID", "flow": "xtls-rprx-vision"}],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [{
+            "certificateFile": "/etc/xray/xray.crt",
+            "keyFile": "/etc/xray/xray.key"
+          }]
+        },
+        "xhttpSettings": {
+          "path": "$XRAY_PATH",
+          "mode": "stream-up"
+        }
+      },
+      "sniffing": { "enabled": true, "destOverride": ["http", "tls"] }
+    }
+  ],
+  "outbounds": [
+    { "protocol": "freedom", "tag": "direct" },
+    { "protocol": "blackhole", "tag": "blocked" }
+  ],
+  "routing": {
+    "rules": [
+      { "type": "field", "ip": ["geoip:private"], "outboundTag": "blocked" },
+      { "type": "field", "protocol": ["bittorrent"], "outboundTag": "blocked" }
+    ]
+  },
+  "stats": {},
+  "policy": {
+    "levels": { "0": { "statsUserUplink": true, "statsUserDownlink": true } },
+    "system": { "statsInboundUplink": true, "statsInboundDownlink": true }
+  }
+}
+EOF
+    msg "Xray config written"
+
+    # Systemd service
+    cat > /etc/systemd/system/xray.service << EOF
+[Unit]
+Description=Xray Service
+After=network-online.target nss-lookup.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+User=root
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+ExecStart=/usr/local/bin/xray -config /etc/xray/config.json
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable xray
+    systemctl restart xray
+
+    echo
+    echo -e "${GREEN}══════════════════════════════════════${NC}"
+    echo -e "${GREEN}  Xray installed on port 443${NC}"
+    echo -e "${CYAN}  Protocol: VLESS + XHTTP + TLS${NC}"
+    echo -e "${CYAN}  UUID: $XRAY_UUID${NC}"
+    echo -e "${CYAN}  Path: $XRAY_PATH${NC}"
+    echo -e "${CYAN}  Domain: $XRAY_DOMAIN${NC}"
+    echo -e "${GREEN}══════════════════════════════════════${NC}"
+    pause
+}
+
+xray_uninstall() {
+    banner
+    echo -e "${BOLD}Uninstall Xray Tunnel${NC}\n"
+    if ! confirm "Remove Xray completely?"; then
+        info "Cancelled"; pause; return
+    fi
+
+    systemctl stop xray 2>/dev/null || true
+    systemctl disable xray 2>/dev/null || true
+    rm -f /etc/systemd/system/xray.service
+    systemctl daemon-reload
+
+    rm -rf /etc/xray
+    rm -f /usr/local/bin/xray
+    msg "Xray removed"
+    pause
+}
+
+tunnel_menu() {
+    while true; do
+        banner
+        echo -e "${BOLD}TUNNEL VPN - Xray Management${NC}\n"
+        echo -e "  ${CYAN}1${NC})  Install Xray (VLESS + XHTTP + TLS on port 443)"
+        echo -e "  ${CYAN}2${NC})  View Xray status"
+        echo -e "  ${CYAN}3${NC})  Restart Xray"
+        echo -e "  ${CYAN}4${NC})  Uninstall Xray"
+        echo
+        echo -e "  ${YELLOW}0${NC})  Back to main menu"
+        echo
+        read -p "Select an option [0-4]: " choice
+
+        case "$choice" in
+            1) xray_install ;;
+            2) systemctl status xray --no-pager 2>&1 | head -20; pause ;;
+            3) systemctl restart xray; msg "Xray restarted"; pause ;;
+            4) xray_uninstall ;;
+            0) return ;;
+            *) warn "Invalid option" ;;
+        esac
+    done
+}
+
+# ──────────────────────────────────────────────
 #  Main Menu
 # ──────────────────────────────────────────────
 
@@ -687,10 +853,11 @@ menu() {
         echo -e "  ${CYAN}3${NC})  List All Users"
         echo -e "  ${CYAN}4${NC})  Delete User(s)"
         echo -e "  ${CYAN}5${NC})  Uninstall (complete)"
+        echo -e "  ${CYAN}6${NC})  TUNNEL VPN (Xray management)"
         echo
         echo -e "  ${YELLOW}0${NC})  Exit"
         echo
-        read -p "Select an option [0-5]: " choice
+        read -p "Select an option [0-6]: " choice
 
         case "$choice" in
             1) install_all ;;
@@ -698,6 +865,7 @@ menu() {
             3) list_users ;;
             4) delete_users ;;
             5) uninstall_all ;;
+            6) tunnel_menu ;;
             0) echo -e "\n${GREEN}Goodbye!${NC}"; exit 0 ;;
             *) warn "Invalid option" ;;
         esac

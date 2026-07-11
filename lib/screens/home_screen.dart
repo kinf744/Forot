@@ -108,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
-                      '${provider.modeLabel} · ${provider.ispLabel.toUpperCase()}',
+                      '${provider.modeLabel} · ${provider.ispLabel.toUpperCase()} · ${provider.serverConfig?.sni ?? provider.serverConfig?.address ?? ""}',
                       style: const TextStyle(color: Colors.white38, fontSize: 12),
                     ),
                   ),
