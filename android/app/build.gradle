@@ -6,8 +6,8 @@ plugins {
 
 android {
     namespace "com.stivaros.app"
-    compileSdk flutter.compileSdkVersion
-    ndkVersion flutter.ndkVersion
+    compileSdk 34
+    ndkVersion "25.1.8937393"
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -25,9 +25,9 @@ android {
     defaultConfig {
         applicationId "com.stivaros.app"
         minSdk 24
-        targetSdk flutter.targetSdkVersion
-        versionCode flutter.versionCode
-        versionName flutter.versionName
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
     }
 
     signingConfigs {
