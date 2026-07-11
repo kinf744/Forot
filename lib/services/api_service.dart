@@ -14,29 +14,46 @@ class ApiService {
     try {
       final response = await http
           .post(
-            Uri.parse('$baseUrl/api/v1/activate'),
+            Uri.parse('$baseUrl/api/v1/devices/register/'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
-              'uuid': uuid,
+              'device_install_id': uuid,
               'phone_number': phoneNumber,
               'activation_code': activationCode,
               'hardware_id': hardwareId,
-              'device_info': {
-                'manufacturer': '',
-                'model': '',
-                'android_version': '',
-                'app_version': '',
-              },
+              'app_version': '1.0.0',
             }),
+          )
+          .timeout(timeout);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return {'success': true, ...data};
+      }
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      return {'success': false, 'message': body['message'] ?? 'Activation failed (${response.statusCode})'};
+    } catch (e) {
+      return {'success': false, 'message': 'Network error: $e'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> checkActivation({
+    required String uuid,
+  }) async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/api/v1/devices/check/?device_id=$uuid'),
+            headers: {'Content-Type': 'application/json'},
           )
           .timeout(timeout);
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
-      return {'success': false, 'message': 'Activation failed (${response.statusCode})'};
+      return {'activated': false, 'message': 'Not activated (${response.statusCode})'};
     } catch (e) {
-      return {'success': false, 'message': 'Network error: $e'};
+      return {'activated': false, 'message': 'Network error: $e'};
     }
   }
 
@@ -59,15 +76,6 @@ class ApiService {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
       return {'success': false, 'message': 'Failed to get config (${response.statusCode})'};
-    } catch (e) {
-      return {'success': false, 'message': 'Network error: $e'};
-    }
-  }
-
-  static Future<Map<String, dynamic>> getStatus() async {
-    try {
-      final response = await http.get(Uri.parse('$baseUrl/api/v1/status')).timeout(timeout);
-      return jsonDecode(response.body) as Map<String, dynamic>;
     } catch (e) {
       return {'success': false, 'message': 'Network error: $e'};
     }

@@ -14,6 +14,7 @@ class AppProvider extends ChangeNotifier {
   VpnState _connectionState = VpnState.disconnected;
   String _errorMessage = '';
   String _hardwareId = '';
+  String _deviceId = '';
   StreamSubscription? _statusSubscription;
 
   User? get user => _user;
@@ -21,6 +22,7 @@ class AppProvider extends ChangeNotifier {
   VpnState get connectionState => _connectionState;
   String get errorMessage => _errorMessage;
   String get hardwareId => _hardwareId;
+  String get deviceId => _deviceId;
   bool get isActivated => _user != null;
   bool get isConnected => _connectionState == VpnState.connected;
 
@@ -28,8 +30,20 @@ class AppProvider extends ChangeNotifier {
     _user = await StorageService.getUser();
     _serverConfig = await StorageService.getServerConfig();
     _hardwareId = await VpnService.getHardwareId();
+    _deviceId = await StorageService.getString('device_uuid');
+    if (_deviceId.isEmpty) {
+      _deviceId = _generateUuid();
+      await StorageService.setString('device_uuid', _deviceId);
+    }
     _listenStatus();
     notifyListeners();
+  }
+
+  String _generateUuid() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final r = now ^ (now << 21) ^ (now >> 8);
+    return '${r.toString().padLeft(8, '0')}-${_hardwareId.hashCode.toString().padLeft(8, '0')}'
+        '-${now.hashCode.toString().padLeft(8, '0')}-${_hardwareId.length.toString().padLeft(8, '0')}';
   }
 
   void _listenStatus() {
@@ -54,12 +68,11 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> activate({
-    required String uuid,
     required String phoneNumber,
     required String activationCode,
   }) async {
     final result = await ApiService.verifyActivation(
-      uuid: uuid,
+      uuid: _deviceId,
       phoneNumber: phoneNumber,
       activationCode: activationCode,
       hardwareId: _hardwareId,
@@ -70,7 +83,7 @@ class AppProvider extends ChangeNotifier {
       _serverConfig = serverData != null ? ServerConfig.fromJson(serverData) : null;
 
       _user = User(
-        uuid: uuid,
+        uuid: _deviceId,
         phoneNumber: phoneNumber,
         activationCode: activationCode,
         serverAddress: _serverConfig?.address,
@@ -137,6 +150,7 @@ class AppProvider extends ChangeNotifier {
     _serverConfig = null;
     _connectionState = VpnState.disconnected;
     _errorMessage = '';
+    _deviceId = await StorageService.getString('device_uuid');
     notifyListeners();
   }
 
