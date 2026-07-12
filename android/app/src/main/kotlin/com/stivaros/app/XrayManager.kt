@@ -213,42 +213,26 @@ class XrayManager(private val context: Context) {
         if (target.exists()) {
             if (!target.setExecutable(true)) {
                 try { Runtime.getRuntime().exec(arrayOf("chmod", "755", target.absolutePath)).waitFor() } catch (_: Exception) {}
-                NativeLogger.i("XrayManager", "Cached binary: forced chmod 755")
-            } else {
-                NativeLogger.i("XrayManager", "Using cached Xray binary: ${target.absolutePath} (size=${target.length()})")
             }
-            Log.i(TAG, "Using cached Xray binary")
+            NativeLogger.i("XrayManager", "Using cached Xray: ${target.absolutePath} (size=${target.length()})")
             return target
         }
 
-        // Try extracting from APK assets first (bundled during build)
+        // Try native lib from jniLibs (like Kighmu — already extracted by Android)
         try {
-            NativeLogger.i("XrayManager", "Extracting Xray from APK assets...")
-            context.assets.open("xray/xray.zip").use { zipInput ->
-                val zis = java.util.zip.ZipInputStream(zipInput)
-                var entry = zis.nextEntry
-                var found = false
-                while (entry != null) {
-                    NativeLogger.i("XrayManager", "Zip entry: ${entry.name}")
-                    if (entry.name == "xray") {
-                        target.outputStream().use { out -> zis.copyTo(out) }
-                        found = true
-                        break
-                    }
-                    entry = zis.nextEntry
+            val nativeLib = context.applicationInfo.nativeLibraryDir + "/libxray.so"
+            val nativeFile = File(nativeLib)
+            if (nativeFile.exists()) {
+                // Copy to filesDir for caching across sessions
+                nativeFile.copyTo(target, overwrite = true)
+                if (!target.setExecutable(true)) {
+                    Runtime.getRuntime().exec(arrayOf("chmod", "755", target.absolutePath)).waitFor()
                 }
-                zis.closeEntry()
-                zis.close()
-                if (!found) throw Exception("xray binary not found in assets zip")
+                NativeLogger.i("XrayManager", "Copied from nativeLib: ${target.absolutePath} (size=${target.length()})")
+                return target
             }
-            if (!target.setExecutable(true)) {
-                Runtime.getRuntime().exec(arrayOf("chmod", "755", target.absolutePath)).waitFor()
-                NativeLogger.i("XrayManager", "Forced chmod 755 on binary")
-            }
-            NativeLogger.i("XrayManager", "Extracted from assets: ${target.absolutePath} (size=${target.length()})")
-            return target
         } catch (e: Exception) {
-            NativeLogger.w("XrayManager", "Asset extraction failed: ${e.message} — falling back to download")
+            NativeLogger.w("XrayManager", "nativeLib extraction failed: ${e.message}")
         }
 
         return try {
@@ -265,16 +249,13 @@ class XrayManager(private val context: Context) {
                 NativeLogger.i("XrayManager", "Downloaded ${zipBytes.size} bytes")
                 val tempZip = File(context.cacheDir, "xray.zip")
                 tempZip.writeBytes(zipBytes)
-
                 val zis = java.util.zip.ZipInputStream(tempZip.inputStream())
                 var entry = zis.nextEntry
                 var found = false
                 while (entry != null) {
-                    NativeLogger.i("XrayManager", "Zip entry: ${entry.name} (${entry.size} bytes)")
                     if (entry.name == "xray") {
                         target.outputStream().use { out -> zis.copyTo(out) }
                         found = true
-                        NativeLogger.i("XrayManager", "Extracted xray binary to ${target.absolutePath}")
                         break
                     }
                     entry = zis.nextEntry
@@ -286,7 +267,6 @@ class XrayManager(private val context: Context) {
             }
             if (!target.setExecutable(true)) {
                 Runtime.getRuntime().exec(arrayOf("chmod", "755", target.absolutePath)).waitFor()
-                NativeLogger.i("XrayManager", "Forced chmod 755 on binary (download)")
             }
             NativeLogger.i("XrayManager", "Xray ready: ${target.absolutePath} (size=${target.length()})")
             target
