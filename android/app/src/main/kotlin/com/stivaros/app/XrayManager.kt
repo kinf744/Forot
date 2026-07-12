@@ -217,41 +217,15 @@ class XrayManager(private val context: Context) {
             return target
         }
 
-        // Try extracting from APK assets first (bundled during build)
-        try {
-            NativeLogger.i("XrayManager", "Extracting Xray from APK assets...")
-            context.assets.open("xray/xray.zip").use { zipInput ->
-                val zis = java.util.zip.ZipInputStream(zipInput)
-                var entry = zis.nextEntry
-                var found = false
-                while (entry != null) {
-                    NativeLogger.i("XrayManager", "Zip entry: ${entry.name}")
-                    if (entry.name == "xray") {
-                        target.outputStream().use { out -> zis.copyTo(out) }
-                        found = true
-                        break
-                    }
-                    entry = zis.nextEntry
-                }
-                zis.closeEntry()
-                zis.close()
-                if (!found) throw Exception("xray binary not found in assets zip")
-            }
-            target.setExecutable(true)
-            NativeLogger.i("XrayManager", "Extracted from assets: ${target.absolutePath} (size=${target.length()})")
-            return target
-        } catch (e: Exception) {
-            NativeLogger.w("XrayManager", "Asset extraction failed: ${e.message} — falling back to download")
-        }
-
         return try {
-            NativeLogger.i("XrayManager", "Downloading Xray binary from API server...")
-            Log.i(TAG, "Downloading Xray binary from API server...")
-            val url = URL("https://api-v1.kingom.ggff.net:5443/api/v1/files/xray.zip")
+            NativeLogger.i("XrayManager", "Downloading Xray v25.12.8 from GitHub Releases...")
+            Log.i(TAG, "Downloading Xray from GitHub Releases...")
+            val url = URL("https://github.com/XTLS/Xray-core/releases/download/v25.12.8/Xray-linux-arm32-v7a.zip")
             val conn = url.openConnection() as HttpURLConnection
             conn.connectTimeout = 30000
             conn.readTimeout = 300000
-            NativeLogger.i("XrayManager", "Connected to API server, reading zip...")
+            conn.setRequestProperty("User-Agent", "Stivaros/1.0")
+            NativeLogger.i("XrayManager", "Connected to GitHub CDN, reading zip...")
             conn.inputStream.use { zipInput ->
                 val zipBytes = zipInput.readBytes()
                 NativeLogger.i("XrayManager", "Downloaded ${zipBytes.size} bytes")

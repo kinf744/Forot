@@ -29,13 +29,6 @@ jobs:
       - name: Get Flutter packages
         run: flutter pub get
 
-      - name: Download Xray binary for Android (v25.12.8)
-        run: |
-          mkdir -p android/app/src/main/assets/xray
-          curl -L -o /tmp/xray.zip "https://github.com/XTLS/Xray-core/releases/download/v25.12.8/Xray-linux-arm32-v7a.zip" --connect-timeout 30 --max-time 180
-          cp /tmp/xray.zip android/app/src/main/assets/xray/xray.zip
-          echo "Xray zip ready: $(ls -lh android/app/src/main/assets/xray/xray.zip)"
-
       - name: Build APK
         run: flutter build apk --release --obfuscate --split-debug-info=debug-info
 
