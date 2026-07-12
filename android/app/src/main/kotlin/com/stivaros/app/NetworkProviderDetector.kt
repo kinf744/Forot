@@ -8,10 +8,8 @@ import android.os.Build
 import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
 import kotlinx.coroutines.async
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -145,7 +143,7 @@ object NetworkProviderDetector {
     }
 
     fun detect(context: Context): NetworkProvider {
-        return runBlockingSafe { detectAsync(context) }
+        return runBlocking { detectAsync(context) }
     }
 
     // ── Cellular detection ─────────────────────────────────────────────────
@@ -538,24 +536,5 @@ object NetworkProviderDetector {
         NativeLogger.i("NetDetect", "cache cleared")
     }
 
-    // ── Sync wrapper (for Flutter method channel) ──────────────────────────
 
-    private fun <T> runBlockingSafe(block: suspend () -> T): T {
-        var result: T? = null
-        var error: Throwable? = null
-        val latch = java.util.concurrent.CountDownLatch(1)
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                result = block()
-            } catch (e: Throwable) {
-                error = e
-            } finally {
-                latch.countDown()
-            }
-        }
-        latch.await()
-        if (error != null) throw error!!
-        @Suppress("UNCHECKED_CAST")
-        return result as T
-    }
 }

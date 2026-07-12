@@ -243,20 +243,30 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 result.success(true)
             }
             "detectNetworkProvider" -> {
-                val provider = NetworkProviderDetector.detect(context)
-                NativeLogger.i("Plugin", "detectNetworkProvider: ${provider.providerName} (${provider.connectionType}) isp=${provider.isp}")
-                result.success(mapOf(
-                    "connectionType" to provider.connectionType,
-                    "providerName" to provider.providerName,
-                    "fullProviderName" to provider.fullProviderName,
-                    "confidence" to provider.confidence.name,
-                    "country" to provider.country,
-                    "mcc" to (provider.mcc ?: ""),
-                    "mnc" to (provider.mnc ?: ""),
-                    "isp" to (provider.isp ?: ""),
-                    "isRoaming" to provider.isRoaming,
-                    "isVpnConnected" to provider.isVpnConnected
-                ))
+                try {
+                    val provider = NetworkProviderDetector.detect(context)
+                    NativeLogger.i("Plugin", "detectNetworkProvider: ${provider.providerName} (${provider.connectionType}) isp=${provider.isp}")
+                    result.success(mapOf(
+                        "connectionType" to provider.connectionType,
+                        "providerName" to provider.providerName,
+                        "fullProviderName" to provider.fullProviderName,
+                        "confidence" to provider.confidence.name,
+                        "country" to provider.country,
+                        "mcc" to (provider.mcc ?: ""),
+                        "mnc" to (provider.mnc ?: ""),
+                        "isp" to (provider.isp ?: ""),
+                        "isRoaming" to provider.isRoaming,
+                        "isVpnConnected" to provider.isVpnConnected
+                    ))
+                } catch (e: Exception) {
+                    NativeLogger.e("Plugin", "detectNetworkProvider error: ${e.message}")
+                    result.success(mapOf(
+                        "connectionType" to "unknown", "providerName" to "Unknown",
+                        "fullProviderName" to "", "confidence" to "NONE",
+                        "country" to "", "mcc" to "", "mnc" to "",
+                        "isp" to "", "isRoaming" to false, "isVpnConnected" to false
+                    ))
+                }
             }
             "getNativeLog" -> {
                 val nativeLog = File(context.filesDir, "native_log.txt")

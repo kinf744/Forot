@@ -308,7 +308,7 @@ class AppProvider extends ChangeNotifier {
     String isp = '';
     try {
       final netInfo = await VpnService.detectNetworkProvider();
-      if (['HIGH', 'MEDIUM'].contains(netInfo['confidence'])) {
+      if (['HIGH', 'MEDIUM', 'LOW'].contains(netInfo['confidence'])) {
         isp = (netInfo['isp'] as String? ?? '').toLowerCase();
         if (isp.contains('mtn')) isp = 'mtn';
         else if (isp.contains('orange')) isp = 'orange';
