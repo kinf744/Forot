@@ -153,7 +153,7 @@ class StivarosVpnService : VpnService() {
         }
     }
 
-    private fun stopVpn() {
+    fun stopVpn() {
         NativeLogger.i("VpnService", "stopVpn()")
         xrayManager?.stop()
         try { vpnInterface?.close(); NativeLogger.i("VpnService", "VPN interface closed") } catch (_: Exception) {}
