@@ -705,17 +705,17 @@ xray_install() {
     echo -e "${BOLD}Install Xray Tunnel${NC}\n"
 
     if ! command -v xray &>/dev/null; then
-        info "Downloading Xray-core v26.1.23..."
-        bash <(curl -fsSL https://raw.githubusercontent.com/XTLS/Xray-install/main/install-release.sh) --version v26.1.23 2>&1
-        msg "Xray v26.1.23 installed"
+        info "Downloading Xray-core v25.12.8..."
+        bash <(curl -fsSL https://raw.githubusercontent.com/XTLS/Xray-install/main/install-release.sh) --version v25.12.8 2>&1
+        msg "Xray v25.12.8 installed"
     else
         current=$(xray version 2>/dev/null | head -1 | awk '{print $2}')
-        if [[ "$current" != "26.1.23" ]]; then
-            info "Upgrading Xray from $current to v26.1.23..."
-            bash <(curl -fsSL https://raw.githubusercontent.com/XTLS/Xray-install/main/install-release.sh) --version v26.1.23 2>&1
-            msg "Xray upgraded to v26.1.23"
+        if [[ "$current" != "25.12.8" ]]; then
+            info "Upgrading Xray from $current to v25.12.8..."
+            bash <(curl -fsSL https://raw.githubusercontent.com/XTLS/Xray-install/main/install-release.sh) --version v25.12.8 2>&1
+            msg "Xray upgraded to v25.12.8"
         else
-            msg "Xray v26.1.23 already installed"
+            msg "Xray v25.12.8 already installed"
         fi
     fi
 
