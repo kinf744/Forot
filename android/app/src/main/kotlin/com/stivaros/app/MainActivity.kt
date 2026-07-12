@@ -15,7 +15,14 @@ class MainActivity : FlutterActivity() {
         NativeLogger.i("MainActivity", "onActivityResult: requestCode=$requestCode resultCode=$resultCode")
         if (requestCode == StivarosVpnService.VPN_REQUEST_CODE) {
             if (resultCode == RESULT_OK) {
-                NativeLogger.i("MainActivity", "VPN permission granted")
+                NativeLogger.i("MainActivity", "VPN permission granted — checking pending params")
+                val params = StivarosPlugin.consumePendingParams()
+                if (params != null) {
+                    NativeLogger.i("MainActivity", "Starting VPN with pending params")
+                    StivarosPlugin.startPendingVpn(params)
+                } else {
+                    NativeLogger.w("MainActivity", "No pending params")
+                }
             } else {
                 NativeLogger.w("MainActivity", "VPN permission denied")
             }

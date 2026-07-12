@@ -76,8 +76,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final connected = await provider.connect();
       if (!mounted) return;
       setState(() => _connectionStep = 0);
-      if (connected) {
-        FileLogger().i('HomeScreen', 'connect() returned true');
+      if (connected && provider.connectionState == VpnState.connected) {
+        FileLogger().i('HomeScreen', 'connect() returned true + CONNECTED');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Connecté'),
@@ -85,7 +85,9 @@ class _HomeScreenState extends State<HomeScreen> {
             duration: Duration(seconds: 2),
           ),
         );
-      } else {
+      } else if (provider.connectionState == VpnState.connecting) {
+        FileLogger().i('HomeScreen', 'permission dialog shown, waiting for VPN...');
+      } else if (!connected) {
         final msg = provider.errorMessage.isNotEmpty ? provider.errorMessage : 'Échec de connexion';
         FileLogger().e('HomeScreen', 'connect() returned false: $msg');
         ScaffoldMessenger.of(context).showSnackBar(

@@ -303,7 +303,10 @@ class AppProvider extends ChangeNotifier {
     FileLogger().i('AppProvider', 'autoConfig: API result keys=${result.keys} success=${result['success']}');
 
     if (result['success'] != true) {
-      FileLogger().e('AppProvider', 'autoConfig: API failed: ${result['message']}');
+      FileLogger().w('AppProvider', 'autoConfig: API failed: ${result['message']} — keeping cached config if available');
+      if (_serverConfig != null) {
+        return true;
+      }
       return false;
     }
     final config = ServerConfig.fromJson(result);
@@ -322,6 +325,17 @@ class AppProvider extends ChangeNotifier {
       FileLogger().e('AppProvider', 'connect: user or config null');
       notifyListeners();
       return false;
+    }
+
+    // Request VPN permission first
+    FileLogger().i('AppProvider', 'connect: requesting VPN permission...');
+    final permissionGranted = await VpnService.requestVpnPermission();
+    if (!permissionGranted) {
+      // Permission dialog was shown — the VPN will start via onActivityResult
+      FileLogger().i('AppProvider', 'connect: permission dialog shown, waiting for user...');
+      _connectionState = VpnState.connecting;
+      notifyListeners();
+      return true;
     }
 
     final config = _serverConfig!;

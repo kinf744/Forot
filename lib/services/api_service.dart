@@ -106,7 +106,7 @@ class ApiService {
       final resp = await http.get(
         Uri.parse('http://ip-api.com/json/?fields=isp,org'),
         headers: {'User-Agent': 'Stivaros/1.0'},
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 5));
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       final isp = ((data['isp'] as String?) ?? (data['org'] as String?) ?? '').toLowerCase();
       if (isp.contains('mtn')) return 'mtn';

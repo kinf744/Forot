@@ -29,7 +29,25 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private var activityBinding: ActivityPluginBinding? = null
     private var pendingConnectParams: Map<String, Any?>? = null
 
+    companion object {
+        @JvmStatic
+        fun consumePendingParams(): Map<String, Any?>? {
+            val plugin = instance ?: return null
+            val params = plugin.pendingConnectParams
+            plugin.pendingConnectParams = null
+            return params
+        }
+
+        @JvmStatic
+        fun startPendingVpn(params: Map<String, Any?>) {
+            instance?.startVpnService(params)
+        }
+
+        private var instance: StivarosPlugin? = null
+    }
+
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        instance = this
         context = binding.applicationContext
         NativeLogger.init(File(context.filesDir, "native_log.txt"))
         NativeLogger.i("StivarosPlugin", "onAttachedToEngine")
@@ -63,6 +81,7 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         channel.setMethodCallHandler(null)
         statusEventChannel.setStreamHandler(null)
         xrayManager?.stop()
+        instance = null
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
@@ -81,56 +100,65 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         activityBinding = null
     }
 
+    private fun startVpnService(params: Map<String, Any?>) {
+        NativeLogger.i("Plugin", "Starting StivarosVpnService with params")
+        val serviceIntent = Intent(context, StivarosVpnService::class.java).apply {
+            action = StivarosVpnService.ACTION_START
+            putExtra("address", params["address"] as? String ?: "")
+            putExtra("port", (params["port"] as? Int) ?: 443)
+            putExtra("uuid", params["uuid"] as? String ?: "")
+            putExtra("protocol", params["protocol"] as? String ?: "vless")
+            putExtra("transport", params["transport"] as? String ?: "xhttp")
+            putExtra("tls", (params["tls"] as? Boolean) ?: true)
+            putExtra("sni", params["sni"] as? String ?: "")
+            putExtra("publicKey", params["publicKey"] as? String ?: "")
+            putExtra("shortId", params["shortId"] as? String ?: "")
+            putExtra("flow", params["flow"] as? String ?: "")
+        }
+        context.startForegroundService(serviceIntent)
+    }
+
     override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
             "connect" -> {
-                val serverAddress = call.argument<String>("address") ?: ""
-                val serverPort = call.argument<Int>("port") ?: 443
-                val uuid = call.argument<String>("uuid") ?: ""
-                val protocol = call.argument<String>("protocol") ?: "vless"
-                val transport = call.argument<String>("transport") ?: "xhttp"
-                val tls = call.argument<Boolean>("tls") ?: true
-                val sni = call.argument<String>("sni") ?: serverAddress
-                val publicKey = call.argument<String>("publicKey") ?: ""
-                val shortId = call.argument<String>("shortId") ?: ""
-                val flow = call.argument<String>("flow") ?: ""
+                val params = mutableMapOf<String, Any?>()
+                params["address"] = call.argument<String>("address") ?: ""
+                params["port"] = call.argument<Int>("port") ?: 443
+                params["uuid"] = call.argument<String>("uuid") ?: ""
+                params["protocol"] = call.argument<String>("protocol") ?: "vless"
+                params["transport"] = call.argument<String>("transport") ?: "xhttp"
+                params["tls"] = call.argument<Boolean>("tls") ?: true
+                params["sni"] = call.argument<String>("sni") ?: (params["address"] as? String ?: "")
+                params["publicKey"] = call.argument<String>("publicKey") ?: ""
+                params["shortId"] = call.argument<String>("shortId") ?: ""
+                params["flow"] = call.argument<String>("flow") ?: ""
 
-                NativeLogger.i("Plugin", "connect called: address=$serverAddress port=$serverPort uuid=$uuid transport=$transport sni=$sni")
+                NativeLogger.i("Plugin", "connect called: address=${params["address"]} port=${params["port"]} uuid=${params["uuid"]}")
 
                 // Check VPN permission
                 val vpnIntent = android.net.VpnService.prepare(context)
                 if (vpnIntent != null) {
-                    NativeLogger.w("Plugin", "VPN permission not granted, returning false")
+                    // Permission not granted — store params and show dialog
+                    NativeLogger.w("Plugin", "VPN permission not granted, storing pending params")
+                    pendingConnectParams = params
+                    val activity = activityBinding?.activity
+                    if (activity != null) {
+                        activity.startActivityForResult(vpnIntent, StivarosVpnService.VPN_REQUEST_CODE)
+                    }
                     result.success(false)
                     return@onMethodCall
                 }
 
-                NativeLogger.i("Plugin", "VPN permission OK, starting StivarosVpnService")
-                val serviceIntent = Intent(context, StivarosVpnService::class.java).apply {
-                    action = StivarosVpnService.ACTION_START
-                    putExtra("address", serverAddress)
-                    putExtra("port", serverPort)
-                    putExtra("uuid", uuid)
-                    putExtra("protocol", protocol)
-                    putExtra("transport", transport)
-                    putExtra("tls", tls)
-                    putExtra("sni", sni)
-                    putExtra("publicKey", publicKey)
-                    putExtra("shortId", shortId)
-                    putExtra("flow", flow)
-                }
-                try {
-                    context.startForegroundService(serviceIntent)
-                    NativeLogger.i("Plugin", "StivarosVpnService started, returning true")
-                    result.success(true)
-                } catch (e: Exception) {
-                    NativeLogger.e("Plugin", "Failed to start service: ${e.message}")
-                    result.error("CONNECT_FAILED", e.message, null)
-                }
+                // Permission already granted
+                NativeLogger.i("Plugin", "VPN permission OK, starting service")
+                pendingConnectParams = null
+                startVpnService(params)
+                result.success(true)
             }
             "disconnect" -> {
                 NativeLogger.i("Plugin", "disconnect called")
                 StivarosVpnService.instance?.stopVpn()
+                pendingConnectParams = null
                 result.success(true)
             }
             "getStatus" -> {
