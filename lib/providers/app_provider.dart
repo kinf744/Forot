@@ -272,6 +272,18 @@ class AppProvider extends ChangeNotifier {
         activationCode: activationCode,
       );
 
+      // Save server config from activation response immediately
+      if (result['server'] is Map<String, dynamic>) {
+        final serverData = result['server'] as Map<String, dynamic>;
+        serverData['config_id'] = serverData['id'];
+        final config = ServerConfig.fromJson(serverData);
+        _serverConfig = config;
+        _modeLabel = '150Mo';
+        _currentTier = '150';
+        await StorageService.saveServerConfig(config);
+        FileLogger().i('AppProvider', 'activation: cached config address=${config.address} sni=${config.sni} host=${config.host}');
+      }
+
       await StorageService.saveUser(_user!);
       notifyListeners();
       return true;

@@ -11,7 +11,7 @@ class ApiService {
     const p6 = ':5443';
     return '$p1$p2$p3$p4$p5$p6';
   }
-  static const Duration timeout = Duration(seconds: 30);
+  static const Duration timeout = Duration(seconds: 60);
 
   static Future<Map<String, dynamic>> verifyActivation({
     required String uuid,
