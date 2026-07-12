@@ -43,13 +43,22 @@ class XrayManager(private val context: Context) {
         socksPort = getFreePort()
         running = true
 
+        NativeLogger.i("XrayManager", "start: address=$serverAddress port=$serverPort uuid=$uuid transport=$transport sni=$sni socksPort=$socksPort")
+        NativeLogger.i("XrayManager", "Writing Xray config...")
         val configFile = writeXrayConfig(
             serverAddress, serverPort, uuid, protocol,
             transport, tls, sni, publicKey, shortId, flow
         )
+        NativeLogger.i("XrayManager", "Config written to: ${configFile.absolutePath}")
+
+        NativeLogger.i("XrayManager", "Extracting/downloading Xray binary...")
         val binary = extractXrayBinary() ?: throw Exception("Xray binary not found")
+        NativeLogger.i("XrayManager", "Binary ready at: ${binary.absolutePath}")
+
+        NativeLogger.i("XrayManager", "Starting Xray process...")
         startXrayProcess(binary, configFile)
 
+        NativeLogger.i("XrayManager", "Waiting for SOCKS port $socksPort to be ready...")
         var ready = false
         for (i in 0 until 25) {
             if (!ready) {
@@ -58,14 +67,19 @@ class XrayManager(private val context: Context) {
                     Socket().use { s ->
                         s.connect(InetSocketAddress("127.0.0.1", socksPort), 200)
                         ready = true
+                        NativeLogger.i("XrayManager", "SOCKS ready after ${(i+1)*200}ms")
                     }
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    if (i == 24) NativeLogger.e("XrayManager", "SOCKS not ready after 5s: ${e.message}")
+                }
             }
         }
         if (!ready) {
             running = false
+            NativeLogger.e("XrayManager", "Xray failed to start within timeout (5s)")
             throw Exception("Xray failed to start within timeout")
         }
+        NativeLogger.i("XrayManager", "Xray started successfully on port $socksPort")
         Log.i(TAG, "Xray started on port $socksPort")
     }
 
@@ -190,37 +204,47 @@ class XrayManager(private val context: Context) {
         val target = File(context.filesDir, "xray")
         if (target.exists()) {
             target.setExecutable(true)
+            NativeLogger.i("XrayManager", "Using cached Xray binary: ${target.absolutePath} (size=${target.length()})")
             Log.i(TAG, "Using cached Xray binary")
             return target
         }
         return try {
+            NativeLogger.i("XrayManager", "Downloading Xray binary from GitHub...")
             Log.i(TAG, "Downloading Xray binary...")
             val url = URL("https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-arm32-v7a.zip")
             val conn = url.openConnection() as HttpURLConnection
             conn.connectTimeout = 30000
             conn.readTimeout = 60000
+            NativeLogger.i("XrayManager", "Connected to GitHub, reading zip...")
             conn.inputStream.use { zipInput ->
                 val zipBytes = zipInput.readBytes()
+                NativeLogger.i("XrayManager", "Downloaded ${zipBytes.size} bytes")
                 val tempZip = File(context.cacheDir, "xray.zip")
                 tempZip.writeBytes(zipBytes)
 
                 val zis = java.util.zip.ZipInputStream(tempZip.inputStream())
                 var entry = zis.nextEntry
+                var found = false
                 while (entry != null) {
+                    NativeLogger.i("XrayManager", "Zip entry: ${entry.name} (${entry.size} bytes)")
                     if (entry.name == "xray") {
                         target.outputStream().use { out -> zis.copyTo(out) }
+                        found = true
+                        NativeLogger.i("XrayManager", "Extracted xray binary to ${target.absolutePath}")
                         break
                     }
                     entry = zis.nextEntry
                 }
+                if (!found) NativeLogger.e("XrayManager", "xray binary not found in zip!")
                 zis.closeEntry()
                 zis.close()
                 tempZip.delete()
             }
             target.setExecutable(true)
-            Log.i(TAG, "Xray downloaded to ${target.absolutePath}")
+            NativeLogger.i("XrayManager", "Xray ready: ${target.absolutePath} (size=${target.length()})")
             target
         } catch (e: Exception) {
+            NativeLogger.e("XrayManager", "Xray download/extract failed: ${e.message}")
             Log.e(TAG, "Xray download failed: ${e.message}")
             null
         }
@@ -228,7 +252,9 @@ class XrayManager(private val context: Context) {
 
     private fun startXrayProcess(binary: File, configFile: File) {
         val cmd = arrayOf(binary.absolutePath, "run", "-c", configFile.absolutePath)
+        NativeLogger.i("XrayManager", "Exec: ${cmd.joinToString(" ")}")
         xrayProcess = Runtime.getRuntime().exec(cmd)
+        NativeLogger.i("XrayManager", "Xray PID: ${xrayProcess?.pid()}")
 
         Thread {
             try {
@@ -237,12 +263,12 @@ class XrayManager(private val context: Context) {
                         val lower = line.lowercase()
                         when {
                             lower.contains("started") && lower.contains("xray") ->
-                                Log.i(TAG, "Xray started")
+                                NativeLogger.i("XrayManager", "Xray reports started: $line")
                             (lower.contains("error") || lower.contains("fatal")) &&
                             !lower.contains("warning") && !lower.contains("deprecated") ->
                                 errorCallback?.invoke("XRAY_ERROR")
                         }
-                        Log.w(TAG, "Xray stderr: ${line.take(150)}")
+                        NativeLogger.w("XrayManager", "Xray stderr: $line")
                     }
                 }
             } catch (_: Exception) {}
@@ -255,7 +281,7 @@ class XrayManager(private val context: Context) {
                         val lower = line.lowercase()
                         when {
                             lower.contains("started") && lower.contains("xray") ->
-                                Log.i(TAG, "Xray started")
+                                NativeLogger.i("XrayManager", "Xray reports started: $line")
                         }
                     }
                 }
@@ -264,6 +290,7 @@ class XrayManager(private val context: Context) {
     }
 
     fun stop() {
+        NativeLogger.i("XrayManager", "stop() called, running=$running")
         running = false
         try {
             xrayProcess?.let { p ->
@@ -271,6 +298,7 @@ class XrayManager(private val context: Context) {
                 p.errorStream?.close()
                 p.outputStream?.close()
                 p.destroyForcibly()
+                NativeLogger.i("XrayManager", "Xray process destroyed")
             }
         } catch (_: Exception) {}
         xrayProcess = null

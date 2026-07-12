@@ -7,7 +7,8 @@ class FileLogger {
   factory FileLogger() => _instance;
   FileLogger._();
 
-  static const _channel = MethodChannel('com.stivaros.app/logs');
+  // Use the same main channel for logging
+  static const _channel = MethodChannel('com.stivaros.app/vpn');
   File? _file;
   String _buffer = '';
   bool _initialized = false;
@@ -22,7 +23,7 @@ class FileLogger {
       }
       await _file!.create();
       _initialized = true;
-      await copyToDownloads();
+      await flush();
       i('FileLogger', 'Log file created at ${_file!.path}');
     } catch (e) {
       print('FileLogger init error: $e');
@@ -30,14 +31,19 @@ class FileLogger {
   }
 
   Future<void> copyToDownloads() async {
+    if (_file == null) return;
+    await flush();
     try {
-      await _channel.invokeMethod('saveToDownloads', {'source': _file?.path ?? ''});
+      await _channel.invokeMethod('saveToDownloads', {'source': _file!.path});
     } catch (_) {}
   }
 
   void i(String tag, String message) => _log('INFO', tag, message);
   void w(String tag, String message) => _log('WARN', tag, message);
-  void e(String tag, String message) => _log('ERROR', tag, message);
+  void e(String tag, String message) {
+    _log('ERROR', tag, message);
+    copyToDownloads(); // flush on error
+  }
 
   void _log(String level, String tag, String message) {
     final line = '[${DateTime.now().toIso8601String()}] [$level] [$tag] $message';

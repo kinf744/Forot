@@ -12,13 +12,12 @@ class MainActivity : FlutterActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        NativeLogger.i("MainActivity", "onActivityResult: requestCode=$requestCode resultCode=$resultCode")
         if (requestCode == StivarosVpnService.VPN_REQUEST_CODE) {
             if (resultCode == RESULT_OK) {
-                val intent = Intent(this, StivarosVpnService::class.java).apply {
-                    action = StivarosVpnService.ACTION_START
-                    putExtras(data?.extras ?: Intent().extras ?: return)
-                }
-                startForegroundService(intent)
+                NativeLogger.i("MainActivity", "VPN permission granted")
+            } else {
+                NativeLogger.w("MainActivity", "VPN permission denied")
             }
         }
     }

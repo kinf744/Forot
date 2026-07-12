@@ -41,9 +41,11 @@ class StivarosVpnService : VpnService() {
         instance = this
         createNotificationChannel()
         xrayManager = XrayManager(this)
+        NativeLogger.i("VpnService", "onCreate: xrayManager created")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        NativeLogger.i("VpnService", "onStartCommand: action=${intent?.action}")
         startForeground(NOTIFICATION_ID, buildNotification("Starting..."))
         when (intent?.action) {
             ACTION_START -> startVpn(intent)
@@ -55,10 +57,12 @@ class StivarosVpnService : VpnService() {
     override fun onBind(intent: Intent?): IBinder? = super.onBind(intent)
 
     override fun onRevoke() {
+        NativeLogger.w("VpnService", "VPN revoked by system")
         stopVpn()
     }
 
     override fun onDestroy() {
+        NativeLogger.i("VpnService", "onDestroy")
         stopVpn()
         serviceJob.cancel()
         instance = null
@@ -77,21 +81,28 @@ class StivarosVpnService : VpnService() {
                 val sni = intent.getStringExtra("sni") ?: serverAddress
                 val publicKey = intent.getStringExtra("publicKey") ?: ""
                 val shortId = intent.getStringExtra("shortId") ?: ""
+                val flow = intent.getStringExtra("flow") ?: ""
+
+                NativeLogger.i("VpnService", "startVpn: $serverAddress:$serverPort uuid=$uuid transport=$transport sni=$sni")
 
                 // Wire up Xray error callback
                 xrayManager?.errorCallback = { msg ->
+                    NativeLogger.e("VpnService", "Xray error callback: $msg")
                     updateStatus("ERROR", msg)
                 }
 
                 // Start Xray
+                NativeLogger.i("VpnService", "Starting Xray...")
                 xrayManager?.start(
                     serverAddress, serverPort, uuid, protocol,
-                    transport, tls, sni, publicKey, shortId
+                    transport, tls, sni, publicKey, shortId, flow
                 )
                 val socksPort = xrayManager?.getSocksPort() ?: 0
+                NativeLogger.i("VpnService", "Xray started, SOCKS port=$socksPort")
                 if (socksPort == 0) throw Exception("Failed to get SOCKS port")
 
                 // Build VPN interface
+                NativeLogger.i("VpnService", "Building VPN interface...")
                 vpnInterface = Builder()
                     .setSession("Stivaros")
                     .addAddress("10.0.0.2", 24)
@@ -104,15 +115,20 @@ class StivarosVpnService : VpnService() {
                     .establish()
 
                 if (vpnInterface == null) {
+                    NativeLogger.e("VpnService", "VPN interface is null! Permission not granted?")
                     throw Exception("Failed to establish VPN interface")
                 }
+                NativeLogger.i("VpnService", "VPN interface established: fd=${vpnInterface!!.fd}")
 
                 // Start SOCKS5 routing via tun2socks relay
+                NativeLogger.i("VpnService", "Starting SOCKS relay (fd=${vpnInterface!!.fd}, socksPort=$socksPort)")
                 startSocksRelay(vpnInterface!!.fd, socksPort)
                 updateStatus("CONNECTED", "Connected")
                 updateNotification("Connected")
+                NativeLogger.i("VpnService", "VPN fully connected!")
 
             } catch (e: Exception) {
+                NativeLogger.e("VpnService", "VPN start error: ${e.message}")
                 Log.e(TAG, "VPN start error: ${e.message}")
                 updateStatus("ERROR", e.message ?: "Connection failed")
                 stopVpn()
@@ -123,26 +139,31 @@ class StivarosVpnService : VpnService() {
     private fun startSocksRelay(fd: Int, socksPort: Int) {
         serviceScope.launch(Dispatchers.IO) {
             try {
+                NativeLogger.i("VpnService", "startSocksRelay: fd=$fd socksPort=$socksPort")
                 val relay = Tun2SocksRelay(
                     ParcelFileDescriptor.fromFd(fd).fileDescriptor,
                     "127.0.0.1", socksPort
                 )
                 relay.start()
+                NativeLogger.i("VpnService", "SOCKS relay thread started")
             } catch (e: Exception) {
+                NativeLogger.e("VpnService", "Socks relay error: ${e.message}")
                 Log.e(TAG, "Socks relay error: ${e.message}")
             }
         }
     }
 
     private fun stopVpn() {
+        NativeLogger.i("VpnService", "stopVpn()")
         xrayManager?.stop()
-        try { vpnInterface?.close() } catch (_: Exception) {}
+        try { vpnInterface?.close(); NativeLogger.i("VpnService", "VPN interface closed") } catch (_: Exception) {}
         vpnInterface = null
         try { stopForeground(STOP_FOREGROUND_REMOVE) } catch (_: Exception) {}
         updateStatus("DISCONNECTED", "Disconnected")
     }
 
     private fun updateStatus(status: String, message: String = "") {
+        NativeLogger.i("VpnService", "updateStatus: $status $message")
         currentStatus = status
         sendBroadcast(Intent(BROADCAST_STATUS).apply {
             putExtra(EXTRA_STATUS, status)

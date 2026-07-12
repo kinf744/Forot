@@ -31,6 +31,8 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
+        NativeLogger.init(File(context.filesDir, "native_log.txt"))
+        NativeLogger.i("StivarosPlugin", "onAttachedToEngine")
         channel = MethodChannel(binding.binaryMessenger, "com.stivaros.app/vpn")
         channel.setMethodCallHandler(this)
         statusEventChannel = EventChannel(binding.binaryMessenger, "com.stivaros.app/vpnStatus")
@@ -93,31 +95,47 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 val shortId = call.argument<String>("shortId") ?: ""
                 val flow = call.argument<String>("flow") ?: ""
 
-                xrayManager?.errorCallback = { msg ->
-                    val intent = Intent(StivarosVpnService.BROADCAST_STATUS).apply {
-                        putExtra(StivarosVpnService.EXTRA_STATUS, "ERROR")
-                        putExtra(StivarosVpnService.EXTRA_MESSAGE, msg)
-                    }
-                    context.sendBroadcast(intent)
+                NativeLogger.i("Plugin", "connect called: address=$serverAddress port=$serverPort uuid=$uuid transport=$transport sni=$sni")
+
+                // Check VPN permission
+                val vpnIntent = android.net.VpnService.prepare(context)
+                if (vpnIntent != null) {
+                    NativeLogger.w("Plugin", "VPN permission not granted, returning false")
+                    result.success(false)
+                    return@onMethodCall
                 }
 
+                NativeLogger.i("Plugin", "VPN permission OK, starting StivarosVpnService")
+                val serviceIntent = Intent(context, StivarosVpnService::class.java).apply {
+                    action = StivarosVpnService.ACTION_START
+                    putExtra("address", serverAddress)
+                    putExtra("port", serverPort)
+                    putExtra("uuid", uuid)
+                    putExtra("protocol", protocol)
+                    putExtra("transport", transport)
+                    putExtra("tls", tls)
+                    putExtra("sni", sni)
+                    putExtra("publicKey", publicKey)
+                    putExtra("shortId", shortId)
+                    putExtra("flow", flow)
+                }
                 try {
-                    xrayManager?.start(
-                        serverAddress, serverPort, uuid, protocol,
-                        transport, tls, sni, publicKey, shortId, flow
-                    )
+                    context.startForegroundService(serviceIntent)
+                    NativeLogger.i("Plugin", "StivarosVpnService started, returning true")
                     result.success(true)
                 } catch (e: Exception) {
+                    NativeLogger.e("Plugin", "Failed to start service: ${e.message}")
                     result.error("CONNECT_FAILED", e.message, null)
                 }
             }
             "disconnect" -> {
-                xrayManager?.stop()
+                NativeLogger.i("Plugin", "disconnect called")
+                StivarosVpnService.instance?.stopVpn()
                 result.success(true)
             }
             "getStatus" -> {
-                val isRunning = xrayManager?.isRunning() ?: false
-                val status = if (isRunning) "CONNECTED" else StivarosVpnService.currentStatus
+                val status = StivarosVpnService.currentStatus
+                NativeLogger.i("Plugin", "getStatus: $status")
                 result.success(status)
             }
             "requestVpnPermission" -> {
@@ -125,17 +143,22 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 if (activity != null) {
                     val intent = android.net.VpnService.prepare(context)
                     if (intent != null) {
+                        NativeLogger.w("Plugin", "VPN permission not granted, showing dialog")
                         activity.startActivityForResult(intent, StivarosVpnService.VPN_REQUEST_CODE)
                         result.success(false)
                     } else {
+                        NativeLogger.i("Plugin", "VPN permission already granted")
                         result.success(true)
                     }
                 } else {
+                    NativeLogger.e("Plugin", "No activity for VPN permission request")
                     result.error("NO_ACTIVITY", "No activity available", null)
                 }
             }
             "getHardwareId" -> {
-                result.success(ActivationHelper.getHardwareId(context))
+                val hwid = ActivationHelper.getHardwareId(context)
+                NativeLogger.i("Plugin", "getHardwareId: ${hwid.take(20)}...")
+                result.success(hwid)
             }
             "getTrafficStats" -> {
                 try {
@@ -151,9 +174,18 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 try {
                     val srcFile = File(source)
                     if (!srcFile.exists()) {
+                        NativeLogger.w("Plugin", "saveToDownloads: source not found: $source")
                         result.success(false)
                         return@onMethodCall
                     }
+
+                    // Merge native log into the Dart log file
+                    val nativeLog = File(context.filesDir, "native_log.txt")
+                    if (nativeLog.exists()) {
+                        srcFile.appendText("\n\n===== NATIVE LOGS =====\n")
+                        srcFile.appendText(nativeLog.readText())
+                    }
+
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         val values = ContentValues().apply {
                             put(MediaStore.Downloads.DISPLAY_NAME, "mtn.txt")
@@ -165,15 +197,27 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                             context.contentResolver.openOutputStream(uri)?.use { out ->
                                 srcFile.inputStream().use { it.copyTo(out) }
                             }
+                            NativeLogger.i("Plugin", "Log saved to Downloads/mtn.txt")
+                        } else {
+                            NativeLogger.e("Plugin", "Failed to create MediaStore entry")
                         }
                     } else {
                         val dest = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "mtn.txt")
                         srcFile.copyTo(dest, overwrite = true)
+                        NativeLogger.i("Plugin", "Log saved to ${dest.absolutePath}")
                     }
                     result.success(true)
                 } catch (e: Exception) {
-                    android.util.Log.e("StivarosPlugin", "saveToDownloads error: ${e.message}")
+                    NativeLogger.e("Plugin", "saveToDownloads error: ${e.message}")
                     result.success(false)
+                }
+            }
+            "getNativeLog" -> {
+                val nativeLog = File(context.filesDir, "native_log.txt")
+                if (nativeLog.exists()) {
+                    result.success(nativeLog.readText())
+                } else {
+                    result.success("")
                 }
             }
             else -> result.notImplemented()
