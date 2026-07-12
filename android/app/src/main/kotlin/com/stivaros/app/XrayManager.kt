@@ -218,23 +218,6 @@ class XrayManager(private val context: Context) {
             return target
         }
 
-        // Try native lib from jniLibs (like Kighmu — already extracted by Android)
-        try {
-            val nativeLib = context.applicationInfo.nativeLibraryDir + "/libxray.so"
-            val nativeFile = File(nativeLib)
-            if (nativeFile.exists()) {
-                // Copy to filesDir for caching across sessions
-                nativeFile.copyTo(target, overwrite = true)
-                if (!target.setExecutable(true)) {
-                    Runtime.getRuntime().exec(arrayOf("chmod", "755", target.absolutePath)).waitFor()
-                }
-                NativeLogger.i("XrayManager", "Copied from nativeLib: ${target.absolutePath} (size=${target.length()})")
-                return target
-            }
-        } catch (e: Exception) {
-            NativeLogger.w("XrayManager", "nativeLib extraction failed: ${e.message}")
-        }
-
         return try {
             NativeLogger.i("XrayManager", "Downloading Xray v25.12.8 from GitHub Releases...")
             Log.i(TAG, "Downloading Xray from GitHub Releases...")
