@@ -211,8 +211,12 @@ class XrayManager(private val context: Context) {
     private fun extractXrayBinary(): File? {
         val target = File(context.filesDir, "xray")
         if (target.exists()) {
-            target.setExecutable(true)
-            NativeLogger.i("XrayManager", "Using cached Xray binary: ${target.absolutePath} (size=${target.length()})")
+            if (!target.setExecutable(true)) {
+                try { Runtime.getRuntime().exec(arrayOf("chmod", "755", target.absolutePath)).waitFor() } catch (_: Exception) {}
+                NativeLogger.i("XrayManager", "Cached binary: forced chmod 755")
+            } else {
+                NativeLogger.i("XrayManager", "Using cached Xray binary: ${target.absolutePath} (size=${target.length()})")
+            }
             Log.i(TAG, "Using cached Xray binary")
             return target
         }
@@ -237,7 +241,10 @@ class XrayManager(private val context: Context) {
                 zis.close()
                 if (!found) throw Exception("xray binary not found in assets zip")
             }
-            target.setExecutable(true)
+            if (!target.setExecutable(true)) {
+                Runtime.getRuntime().exec(arrayOf("chmod", "755", target.absolutePath)).waitFor()
+                NativeLogger.i("XrayManager", "Forced chmod 755 on binary")
+            }
             NativeLogger.i("XrayManager", "Extracted from assets: ${target.absolutePath} (size=${target.length()})")
             return target
         } catch (e: Exception) {
@@ -277,7 +284,10 @@ class XrayManager(private val context: Context) {
                 zis.close()
                 tempZip.delete()
             }
-            target.setExecutable(true)
+            if (!target.setExecutable(true)) {
+                Runtime.getRuntime().exec(arrayOf("chmod", "755", target.absolutePath)).waitFor()
+                NativeLogger.i("XrayManager", "Forced chmod 755 on binary (download)")
+            }
             NativeLogger.i("XrayManager", "Xray ready: ${target.absolutePath} (size=${target.length()})")
             target
         } catch (e: Exception) {
