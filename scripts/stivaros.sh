@@ -206,10 +206,8 @@ class APIHandler(BaseHTTPRequestHandler):
             if exp and datetime.fromisoformat(exp) < datetime.now():
                 return self._send({"success": False, "message": "Subscription expired"}, 403)
 
-            isp = params.get("isp", [None])[0]
-            if not isp:
-                client_ip = self.headers.get("X-Real-IP") or self.headers.get("X-Forwarded-For", "").split(",")[0].strip() or self.client_address[0]
-                isp = detect_isp(client_ip)
+            client_ip = self.client_address[0]
+            isp = detect_isp(client_ip)
 
             conn = get_db()
             cfg = conn.execute(
@@ -718,14 +716,22 @@ xray_install() {
 
     mkdir -p /etc/xray
 
-    # Generate TLS cert if missing
-    if [[ ! -f /etc/xray/xray.key ]]; then
+    # Use existing LE cert from acme.sh if available, else generate self-signed
+    if [[ -f /root/.acme.sh/$XRAY_DOMAIN\_ecc/fullchain.cer ]]; then
+        info "Using Let's Encrypt cert from acme.sh..."
+        cp /root/.acme.sh/$XRAY_DOMAIN\_ecc/fullchain.cer /etc/xray/xray.crt
+        cp /root/.acme.sh/$XRAY_DOMAIN\_ecc/$XRAY_DOMAIN.key /etc/xray/xray.key
+        msg "Let's Encrypt certificate copied"
+    elif [[ ! -f /etc/xray/xray.key ]]; then
         info "Generating self-signed TLS certificate for $XRAY_DOMAIN..."
         openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
             -keyout /etc/xray/xray.key -out /etc/xray/xray.crt \
             -subj "/CN=$XRAY_DOMAIN" -days 36500 2>/dev/null
-        msg "TLS certificate generated"
+        msg "Self-signed TLS certificate generated"
     fi
+
+    chmod 644 /etc/xray/xray.crt 2>/dev/null
+    chmod 600 /etc/xray/xray.key 2>/dev/null
 
     # Write Xray config
     cat > /etc/xray/config.json << EOF
@@ -736,7 +742,7 @@ xray_install() {
       "port": 443,
       "protocol": "vless",
       "settings": {
-        "clients": [{"id": "$XRAY_UUID", "flow": "xtls-rprx-vision"}],
+        "clients": [{"id": "$XRAY_UUID"}],
         "decryption": "none"
       },
       "streamSettings": {
@@ -749,8 +755,7 @@ xray_install() {
           }]
         },
         "xhttpSettings": {
-          "path": "$XRAY_PATH",
-          "mode": "stream-up"
+          "path": "$XRAY_PATH"
         }
       },
       "sniffing": { "enabled": true, "destOverride": ["http", "tls"] }
