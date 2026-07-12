@@ -49,7 +49,6 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         instance = this
         context = binding.applicationContext
-        NativeLogger.init(File(context.filesDir, "native_log.txt"))
         NativeLogger.i("StivarosPlugin", "onAttachedToEngine")
         channel = MethodChannel(binding.binaryMessenger, "com.stivaros.app/vpn")
         channel.setMethodCallHandler(this)
@@ -209,13 +208,6 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                         return@onMethodCall
                     }
 
-                    // Merge native log into the Dart log file
-                    val nativeLog = File(context.filesDir, "native_log.txt")
-                    if (nativeLog.exists()) {
-                        srcFile.appendText("\n\n===== NATIVE LOGS =====\n")
-                        srcFile.appendText(nativeLog.readText())
-                    }
-
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         val values = ContentValues().apply {
                             put(MediaStore.Downloads.DISPLAY_NAME, "mtn.txt")
@@ -241,6 +233,14 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                     NativeLogger.e("Plugin", "saveToDownloads error: ${e.message}")
                     result.success(false)
                 }
+            }
+            "initNativeLogger" -> {
+                val path = call.argument<String>("path") ?: ""
+                if (path.isNotBlank()) {
+                    NativeLogger.setFile(File(path))
+                    NativeLogger.i("StivarosPlugin", "NativeLogger redirected to: $path")
+                }
+                result.success(true)
             }
             "getNativeLog" -> {
                 val nativeLog = File(context.filesDir, "native_log.txt")

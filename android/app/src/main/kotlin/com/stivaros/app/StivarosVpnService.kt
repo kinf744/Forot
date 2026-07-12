@@ -104,7 +104,9 @@ class StivarosVpnService : VpnService() {
 
                 // Build VPN interface
                 NativeLogger.i("VpnService", "Building VPN interface...")
-                vpnInterface = Builder()
+                NativeLogger.i("VpnService", "Builder params: mtu=1400 blocking=true")
+
+                val builder = Builder()
                     .setSession("Stivaros")
                     .addAddress("10.0.0.2", 24)
                     .addRoute("0.0.0.0", 0)
@@ -113,17 +115,21 @@ class StivarosVpnService : VpnService() {
                     .setMtu(1400)
                     .setBlocking(true)
                     .addDisallowedApplication(packageName)
-                    .establish()
 
-                if (vpnInterface == null) {
+                NativeLogger.i("VpnService", "Calling establish()...")
+                val fd = builder.establish()
+                NativeLogger.i("VpnService", "establish() returned fd=${fd?.fd ?: "null"}")
+
+                if (fd == null) {
                     NativeLogger.e("VpnService", "VPN interface is null! Permission not granted?")
                     throw Exception("Failed to establish VPN interface")
                 }
-                NativeLogger.i("VpnService", "VPN interface established: fd=${vpnInterface!!.fd}")
+                vpnInterface = fd
+                NativeLogger.i("VpnService", "VPN interface established: fd=$fd")
 
                 // Start SOCKS5 routing via tun2socks relay
-                NativeLogger.i("VpnService", "Starting SOCKS relay (fd=${vpnInterface!!.fd}, socksPort=$socksPort)")
-                startSocksRelay(vpnInterface!!.fd, socksPort)
+                NativeLogger.i("VpnService", "Starting SOCKS relay (fd=$fd, socksPort=$socksPort)")
+                startSocksRelay(fd, socksPort)
                 updateStatus("CONNECTED", "Connected")
                 updateNotification("Connected")
                 NativeLogger.i("VpnService", "VPN fully connected!")

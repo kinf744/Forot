@@ -18,6 +18,11 @@ object NativeLogger {
         i("NativeLogger", "Log file initialized: ${file.absolutePath}")
     }
 
+    fun setFile(file: File) {
+        logFile = file
+        i("NativeLogger", "Log file switched to: ${file.absolutePath}")
+    }
+
     fun i(tag: String, msg: String) { log("INFO", tag, msg) }
     fun w(tag: String, msg: String) { log("WARN", tag, msg) }
     fun e(tag: String, msg: String) { log("ERROR", tag, msg) }

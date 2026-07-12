@@ -23,6 +23,10 @@ class FileLogger {
       }
       await _file!.create();
       _initialized = true;
+      // Redirect native logs to the same file
+      try {
+        await _channel.invokeMethod('initNativeLogger', {'path': _file!.path});
+      } catch (_) {}
       await flush();
       i('FileLogger', 'Log file created at ${_file!.path}');
     } catch (e) {

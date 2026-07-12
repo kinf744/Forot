@@ -68,10 +68,10 @@ class XrayManager(private val context: Context) {
                     Socket().use { s ->
                         s.connect(InetSocketAddress("127.0.0.1", socksPort), 200)
                         ready = true
-                        NativeLogger.i("XrayManager", "SOCKS ready after ${(i+1)*200}ms")
+                        NativeLogger.i("XrayManager", "SOCKS ready after ${(i+1)*200}ms (attempt ${i+1}/25)")
                     }
                 } catch (e: Exception) {
-                    if (i == 24) NativeLogger.e("XrayManager", "SOCKS not ready after 5s: ${e.message}")
+                    NativeLogger.w("XrayManager", "SOCKS attempt ${i+1}/25 failed: ${e.message}")
                 }
             }
         }
@@ -92,7 +92,7 @@ class XrayManager(private val context: Context) {
     ): File {
         val sb = StringBuilder()
         sb.appendLine("{")
-        sb.appendLine("""  "log": { "loglevel": "warning" },""")
+        sb.appendLine("""  "log": { "loglevel": "debug" },""")
         sb.appendLine("""  "inbounds": [{""")
         sb.appendLine("""    "port": $socksPort,""")
         sb.appendLine("""    "listen": "127.0.0.1",""")
@@ -210,28 +210,31 @@ class XrayManager(private val context: Context) {
 
     private fun extractXrayBinary(): File? {
         val target = File(context.filesDir, "xray")
-        if (target.exists()) {
-            if (!target.setExecutable(true)) {
-                try { Runtime.getRuntime().exec(arrayOf("chmod", "755", target.absolutePath)).waitFor() } catch (_: Exception) {}
-            }
-            NativeLogger.i("XrayManager", "Using cached Xray: ${target.absolutePath} (size=${target.length()})")
-            return target
-        }
 
-        // Use directly from nativeLibraryDir (Android extrait avec bonnes permissions)
+        // PRIORITY 1: Use directly from nativeLibraryDir (Android extrait avec bonnes permissions)
         try {
             val nativeFile = File(context.applicationInfo.nativeLibraryDir, "libxray.so")
             if (nativeFile.exists()) {
                 NativeLogger.i("XrayManager", "Using nativeLib directly: ${nativeFile.absolutePath} (size=${nativeFile.length()})")
-                // Cache copy for subsequent launches
-                nativeFile.copyTo(target, overwrite = true)
-                target.setExecutable(true)
+                // Delete stale cached copy so we never accidentally use it
+                if (target.exists()) target.delete()
                 return nativeFile
             }
         } catch (e: Exception) {
-            NativeLogger.w("XrayManager", "nativeLib: ${e.message}")
+            NativeLogger.w("XrayManager", "nativeLib error: ${e.message}")
         }
 
+        // PRIORITY 2: Cached copy (may also be from nativeLib on older launches)
+        if (target.exists()) {
+            // On Android 14+, filesDir is noexec, so this will fail — but try anyway for older devices
+            if (!target.setExecutable(true)) {
+                try { Runtime.getRuntime().exec(arrayOf("chmod", "755", target.absolutePath)).waitFor() } catch (_: Exception) {}
+            }
+            NativeLogger.w("XrayManager", "Using cached Xray (may fail on Android 14+): ${target.absolutePath} (size=${target.length()})")
+            return target
+        }
+
+        // PRIORITY 3: Download from GitHub
         return try {
             NativeLogger.i("XrayManager", "Downloading Xray v25.12.8 from GitHub Releases...")
             Log.i(TAG, "Downloading Xray from GitHub Releases...")
@@ -278,37 +281,47 @@ class XrayManager(private val context: Context) {
         val cmd = arrayOf(binary.absolutePath, "run", "-c", configFile.absolutePath)
         NativeLogger.i("XrayManager", "Exec: ${cmd.joinToString(" ")}")
         xrayProcess = Runtime.getRuntime().exec(cmd)
-        NativeLogger.i("XrayManager", "Xray PID: ${if (xrayProcess != null) "process started" else "null"}")
+        val pid = try { xrayProcess?.pid() } catch (_: Exception) { -1 }
+        NativeLogger.i("XrayManager", "Xray process started pid=$pid alive=${xrayProcess?.isAlive}")
 
         Thread {
             try {
                 xrayProcess?.errorStream?.bufferedReader()?.forEachLine { line ->
-                    if (line.isNotBlank() && line.length <= 500) {
-                        val lower = line.lowercase()
-                        when {
-                            lower.contains("started") && lower.contains("xray") ->
-                                NativeLogger.i("XrayManager", "Xray reports started: $line")
-                            (lower.contains("error") || lower.contains("fatal")) &&
-                            !lower.contains("warning") && !lower.contains("deprecated") ->
-                                errorCallback?.invoke("XRAY_ERROR")
+                    if (line.isNotBlank()) {
+                        val truncated = if (line.length > 500) line.take(500) + "..." else line
+                        val lower = truncated.lowercase()
+                        if (lower.contains("started")) NativeLogger.i("XrayManager", "Xray stdout: $truncated")
+                        else if (lower.contains("error") || lower.contains("fatal")) {
+                            NativeLogger.e("XrayManager", "Xray stderr: $truncated")
+                            errorCallback?.invoke("XRAY_ERROR")
                         }
-                        NativeLogger.w("XrayManager", "Xray stderr: $line")
+                        else NativeLogger.w("XrayManager", "Xray stderr: $truncated")
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                NativeLogger.w("XrayManager", "stderr reader ended: ${e.message}")
+            }
         }.also { it.isDaemon = true }.start()
 
         Thread {
             try {
                 xrayProcess?.inputStream?.bufferedReader()?.forEachLine { line ->
-                    if (line.isNotBlank() && line.length <= 500) {
-                        val lower = line.lowercase()
-                        when {
-                            lower.contains("started") && lower.contains("xray") ->
-                                NativeLogger.i("XrayManager", "Xray reports started: $line")
-                        }
+                    if (line.isNotBlank()) {
+                        val truncated = if (line.length > 500) line.take(500) + "..." else line
+                        NativeLogger.i("XrayManager", "Xray stdout: $truncated")
                     }
                 }
+            } catch (e: Exception) {
+                NativeLogger.w("XrayManager", "stdout reader ended: ${e.message}")
+            }
+        }.also { it.isDaemon = true }.start()
+
+        // Monitor process exit
+        Thread {
+            try {
+                val exitCode = xrayProcess?.waitFor()
+                NativeLogger.w("XrayManager", "Xray process exited code=$exitCode running=$running")
+                if (running) errorCallback?.invoke("XRAY_DIED")
             } catch (_: Exception) {}
         }.also { it.isDaemon = true }.start()
     }
