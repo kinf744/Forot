@@ -149,7 +149,12 @@ class XrayManager(private val context: Context) {
                 sb.appendLine("""      "xhttpSettings": {""")
                 sb.appendLine("""        "path": "/vless-xhttp",""")
                 sb.appendLine("""        "mode": "auto",""")
-                sb.appendLine("""        "host": ["$host"]""")
+                sb.appendLine("""        "host": "$host",""")
+                sb.appendLine("""        "scMaxConcurrentPosts": 16,""")
+                sb.appendLine("""        "scMinPostsIntervalMs": 10,""")
+                sb.appendLine("""        "scMaxEachPostBytes": 1000000,""")
+                sb.appendLine("""        "noSSEHeader": true,""")
+                sb.appendLine("""        "xPaddingBytes": "100-1000"""")
                 sb.appendLine("""      },""")
             }
             "ws" -> {
@@ -191,7 +196,8 @@ class XrayManager(private val context: Context) {
             sb.appendLine("""      "security": "none""")
         }
 
-        sb.appendLine("""    }""")
+        sb.appendLine("""    },""")
+        sb.appendLine("""    "mux": { "enabled": false }""")
         sb.appendLine("""  }],""")
         sb.appendLine("""  "routing": { "rules": [] }""")
         sb.appendLine("}")
