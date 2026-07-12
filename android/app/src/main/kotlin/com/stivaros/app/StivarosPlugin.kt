@@ -248,11 +248,13 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 result.success(mapOf(
                     "connectionType" to provider.connectionType,
                     "providerName" to provider.providerName,
+                    "fullProviderName" to provider.fullProviderName,
+                    "confidence" to provider.confidence.name,
                     "country" to provider.country,
                     "mcc" to (provider.mcc ?: ""),
                     "mnc" to (provider.mnc ?: ""),
                     "isp" to (provider.isp ?: ""),
-                    "isDetected" to provider.isDetected,
+                    "isRoaming" to provider.isRoaming,
                     "isVpnConnected" to provider.isVpnConnected
                 ))
             }

@@ -8,7 +8,10 @@ import android.os.Build
 import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
 import kotlinx.coroutines.async
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -162,12 +165,12 @@ object NetworkProviderDetector {
             } ?: tm
         } else tm
 
-        val networkOp = safeGet(subTm) { it.networkOperator } ?: ""
-        val networkOpName = safeGet(subTm) { it.networkOperatorName } ?: ""
-        val simOp = safeGet(subTm) { it.simOperator } ?: ""
-        val simOpName = safeGet(subTm) { it.simOperatorName } ?: ""
-        val countryIso = safeGet(subTm) { it.networkCountryIso } ?: ""
-        val isRoaming = safeGet(subTm) { it.isNetworkRoaming } ?: false
+        val networkOp = safeGet(subTm) { tm -> tm.networkOperator } ?: ""
+        val networkOpName = safeGet(subTm) { tm -> tm.networkOperatorName } ?: ""
+        val simOp = safeGet(subTm) { tm -> tm.simOperator } ?: ""
+        val simOpName = safeGet(subTm) { tm -> tm.simOperatorName } ?: ""
+        val countryIso = safeGet(subTm) { tm -> tm.networkCountryIso } ?: ""
+        val isRoaming = safeGet(subTm) { tm -> tm.isNetworkRoaming } ?: false
 
         NativeLogger.i("NetDetect",
             "cellular: netOp=$networkOp netName=$networkOpName simOp=$simOp simName=$simOpName " +
@@ -362,7 +365,12 @@ object NetworkProviderDetector {
             if (nc.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) continue
             if (nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
                 nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
-                NativeLogger.i("NetDetect", "findRealNetwork: VPN bypass -> $network (${nc.transport})")
+                val trans = when {
+                    nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
+                    nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+                    else -> "other"
+                }
+                NativeLogger.i("NetDetect", "findRealNetwork: VPN bypass -> $network ($trans)")
                 return network
             }
         }
@@ -392,7 +400,10 @@ object NetworkProviderDetector {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return null
         return try {
             val sm = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? SubscriptionManager
-            sm?.defaultDataSubscriptionId?.takeIf { it != SubscriptionManager.INVALID_SUBSCRIPTION_ID }
+            sm?.let { subMgr ->
+                val subId = subMgr.defaultDataSubscriptionId
+                if (subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) subId else null
+            }
         } catch (_: Exception) { null }
     }
 
@@ -516,7 +527,7 @@ object NetworkProviderDetector {
     }
 
     /** Safe TelephonyManager call that catches SecurityException. */
-    private fun <T> safeGet(tm: TelephonyManager?, block: TelephonyManager.() -> T): T? {
+    private fun <T> safeGet(tm: TelephonyManager?, block: (TelephonyManager) -> T): T? {
         if (tm == null) return null
         return try { block(tm) } catch (e: SecurityException) { null }
     }
@@ -532,7 +543,7 @@ object NetworkProviderDetector {
         var result: T? = null
         var error: Throwable? = null
         val latch = java.util.concurrent.CountDownLatch(1)
-        kotlinx.coroutines.GlobalScope.launch {
+        CoroutineScope(Dispatchers.IO).launch {
             try {
                 result = block()
             } catch (e: Throwable) {
