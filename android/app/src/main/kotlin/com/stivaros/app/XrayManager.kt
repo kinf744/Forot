@@ -35,6 +35,7 @@ class XrayManager(private val context: Context) {
         transport: String = "xhttp",
         tls: Boolean = true,
         sni: String = serverAddress,
+        host: String = sni,
         publicKey: String = "",
         shortId: String = "",
         flow: String = ""
@@ -43,11 +44,11 @@ class XrayManager(private val context: Context) {
         socksPort = getFreePort()
         running = true
 
-        NativeLogger.i("XrayManager", "start: address=$serverAddress port=$serverPort uuid=$uuid transport=$transport sni=$sni socksPort=$socksPort")
+        NativeLogger.i("XrayManager", "start: address=$serverAddress port=$serverPort uuid=$uuid transport=$transport sni=$sni host=$host socksPort=$socksPort")
         NativeLogger.i("XrayManager", "Writing Xray config...")
         val configFile = writeXrayConfig(
             serverAddress, serverPort, uuid, protocol,
-            transport, tls, sni, publicKey, shortId, flow
+            transport, tls, sni, host, publicKey, shortId, flow
         )
         NativeLogger.i("XrayManager", "Config written to: ${configFile.absolutePath}")
 
@@ -86,7 +87,7 @@ class XrayManager(private val context: Context) {
     private fun writeXrayConfig(
         address: String, port: Int, uuid: String,
         protocol: String, transport: String,
-        tls: Boolean, sni: String,
+        tls: Boolean, sni: String, host: String,
         publicKey: String, shortId: String, flow: String
     ): File {
         val sb = StringBuilder()
@@ -147,7 +148,8 @@ class XrayManager(private val context: Context) {
             "xhttp" -> {
                 sb.appendLine("""      "xhttpSettings": {""")
                 sb.appendLine("""        "path": "/vless-xhttp",""")
-                sb.appendLine("""        "mode": "auto""")
+                sb.appendLine("""        "mode": "auto",""")
+                sb.appendLine("""        "host": ["$host"]""")
                 sb.appendLine("""      },""")
             }
             "ws" -> {

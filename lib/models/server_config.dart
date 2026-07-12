@@ -5,6 +5,7 @@ class ServerConfig {
   final String transport;
   final bool tls;
   final String sni;
+  final String host;
   final String? publicKey;
   final String? shortId;
   final String? flow;
@@ -18,12 +19,14 @@ class ServerConfig {
     this.transport = 'xhttp',
     this.tls = true,
     String? sni,
+    String? host,
     this.publicKey,
     this.shortId,
     this.flow,
     this.configId,
     this.xrayUuid,
-  }) : sni = (sni == null || sni.isEmpty) ? address : sni;
+  })  : sni = (sni == null || sni.isEmpty) ? address : sni,
+        host = (host == null || host.isEmpty) ? (sni == null || sni.isEmpty ? address : sni) : host;
 
   factory ServerConfig.fromJson(Map<String, dynamic> json) {
     return ServerConfig(
@@ -33,6 +36,7 @@ class ServerConfig {
       transport: json['transport'] ?? 'xhttp',
       tls: json['tls'] ?? true,
       sni: json['sni'] ?? '',
+      host: json['host'] ?? '',
       publicKey: json['public_key'],
       shortId: json['short_id'],
       flow: json['flow'],
@@ -48,6 +52,7 @@ class ServerConfig {
     'transport': transport,
     'tls': tls,
     'sni': sni,
+    'host': host,
     'public_key': publicKey,
     'short_id': shortId,
     'flow': flow,

@@ -209,6 +209,7 @@ class AppProvider extends ChangeNotifier {
       transport: config.transport,
       tls: config.tls,
       sni: config.sni,
+      host: config.host,
       publicKey: config.publicKey ?? '',
       shortId: config.shortId ?? '',
       flow: config.flow ?? '',
@@ -346,7 +347,7 @@ class AppProvider extends ChangeNotifier {
     _connectionState = VpnState.connecting;
     notifyListeners();
 
-    FileLogger().i('AppProvider', 'connect: address=${config.address} port=${config.port} uuid=${config.xrayUuid ?? _user!.uuid} transport=${config.transport} sni=${config.sni}');
+    FileLogger().i('AppProvider', 'connect: address=${config.address} port=${config.port} uuid=${config.xrayUuid ?? _user!.uuid} transport=${config.transport} sni=${config.sni} host=${config.host}');
     final success = await VpnService.connect(
       address: config.address,
       port: config.port,
@@ -355,6 +356,7 @@ class AppProvider extends ChangeNotifier {
       transport: config.transport,
       tls: config.tls,
       sni: config.sni,
+      host: config.host,
       publicKey: config.publicKey ?? '',
       shortId: config.shortId ?? '',
       flow: config.flow ?? '',

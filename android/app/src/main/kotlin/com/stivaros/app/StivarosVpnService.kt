@@ -79,11 +79,12 @@ class StivarosVpnService : VpnService() {
                 val transport = intent.getStringExtra("transport") ?: "xhttp"
                 val tls = intent.getBooleanExtra("tls", true)
                 val sni = intent.getStringExtra("sni") ?: serverAddress
+                val host = intent.getStringExtra("host") ?: sni
                 val publicKey = intent.getStringExtra("publicKey") ?: ""
                 val shortId = intent.getStringExtra("shortId") ?: ""
                 val flow = intent.getStringExtra("flow") ?: ""
 
-                NativeLogger.i("VpnService", "startVpn: $serverAddress:$serverPort uuid=$uuid transport=$transport sni=$sni")
+                NativeLogger.i("VpnService", "startVpn: $serverAddress:$serverPort uuid=$uuid transport=$transport sni=$sni host=$host")
 
                 // Wire up Xray error callback
                 xrayManager?.errorCallback = { msg ->
@@ -95,7 +96,7 @@ class StivarosVpnService : VpnService() {
                 NativeLogger.i("VpnService", "Starting Xray...")
                 xrayManager?.start(
                     serverAddress, serverPort, uuid, protocol,
-                    transport, tls, sni, publicKey, shortId, flow
+                    transport, tls, sni, host, publicKey, shortId, flow
                 )
                 val socksPort = xrayManager?.getSocksPort() ?: 0
                 NativeLogger.i("VpnService", "Xray started, SOCKS port=$socksPort")
