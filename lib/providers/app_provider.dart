@@ -340,17 +340,6 @@ class AppProvider extends ChangeNotifier {
       return false;
     }
 
-    // Request VPN permission first
-    FileLogger().i('AppProvider', 'connect: requesting VPN permission...');
-    final permissionGranted = await VpnService.requestVpnPermission();
-    if (!permissionGranted) {
-      // Permission dialog was shown — the VPN will start via onActivityResult
-      FileLogger().i('AppProvider', 'connect: permission dialog shown, waiting for user...');
-      _connectionState = VpnState.connecting;
-      notifyListeners();
-      return true;
-    }
-
     final config = _serverConfig!;
     _currentTier = '150';
     _retryCount = 0;
@@ -379,10 +368,15 @@ class AppProvider extends ChangeNotifier {
       await _recordBaseline();
       _startTrafficPolling();
     } else {
-      _connectionState = VpnState.error;
-      _errorMessage = 'Impossible de lancer le tunnel VPN';
-      FileLogger().e('AppProvider', 'connect: VpnService returned FAILED');
-      notifyListeners();
+      // Permission dialog was shown — the VPN will start via onActivityResult
+      if (_connectionState == VpnState.connecting) {
+        FileLogger().i('AppProvider', 'connect: VPN permission dialog shown, waiting...');
+      } else {
+        _connectionState = VpnState.error;
+        _errorMessage = 'Impossible de lancer le tunnel VPN';
+        FileLogger().e('AppProvider', 'connect: VpnService returned FAILED');
+        notifyListeners();
+      }
     }
     return success;
   }
@@ -395,16 +389,11 @@ class AppProvider extends ChangeNotifier {
     if (configId != null) {
       ApiService.deleteConfig(configId: configId);
     }
-    _serverConfig = null;
     _connectionState = VpnState.disconnected;
-    _modeLabel = '';
-    _ispLabel = '';
-    _currentTier = '150';
     _retryCount = 0;
     _connectionStartTime = null;
     _quotaExhausted = false;
     _isHandlingQuota = false;
-    StorageService.clearServerConfig();
     notifyListeners();
     FileLogger().i('AppProvider', 'disconnect() done');
   }
