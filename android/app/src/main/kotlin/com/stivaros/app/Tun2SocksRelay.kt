@@ -109,7 +109,7 @@ class Tun2SocksRelay(
 
         scope.launch(Dispatchers.IO) {
             try {
-                val sock = socks5Connect("8.8.8.8", 53) ?: return@launch
+                val sock = socks5Connect("129.0.183.251", 53) ?: return@launch
                 val out = sock.getOutputStream()
                 out.write(byteArrayOf((data.size shr 8).toByte(), (data.size and 0xFF).toByte()))
                 out.write(data)
