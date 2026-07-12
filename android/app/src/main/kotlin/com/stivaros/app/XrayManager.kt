@@ -254,7 +254,7 @@ class XrayManager(private val context: Context) {
         val cmd = arrayOf(binary.absolutePath, "run", "-c", configFile.absolutePath)
         NativeLogger.i("XrayManager", "Exec: ${cmd.joinToString(" ")}")
         xrayProcess = Runtime.getRuntime().exec(cmd)
-        NativeLogger.i("XrayManager", "Xray PID: ${xrayProcess?.pid()}")
+        NativeLogger.i("XrayManager", "Xray PID: ${if (xrayProcess != null) "process started" else "null"}")
 
         Thread {
             try {
