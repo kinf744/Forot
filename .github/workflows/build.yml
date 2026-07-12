@@ -29,6 +29,16 @@ jobs:
       - name: Get Flutter packages
         run: flutter pub get
 
+      - name: Download Xray binary for jniLibs
+        run: |
+          mkdir -p android/app/src/main/jniLibs/armeabi-v7a
+          curl -L -o /tmp/xray.zip \
+            "https://github.com/XTLS/Xray-core/releases/download/v25.12.8/Xray-linux-arm32-v7a.zip" \
+            --connect-timeout 30 --max-time 180
+          unzip -p /tmp/xray.zip xray > android/app/src/main/jniLibs/armeabi-v7a/libxray.so
+          chmod +x android/app/src/main/jniLibs/armeabi-v7a/libxray.so
+          echo "libxray.so: $(ls -lh android/app/src/main/jniLibs/armeabi-v7a/libxray.so)"
+
       - name: Build APK
         run: flutter build apk --release --obfuscate --split-debug-info=debug-info
 
