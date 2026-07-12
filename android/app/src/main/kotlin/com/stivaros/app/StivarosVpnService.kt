@@ -128,8 +128,8 @@ class StivarosVpnService : VpnService() {
                 NativeLogger.i("VpnService", "VPN interface established: fd=$fd")
 
                 // Start SOCKS5 routing via tun2socks relay
-                NativeLogger.i("VpnService", "Starting SOCKS relay (fd=$fd, socksPort=$socksPort)")
-                startSocksRelay(fd, socksPort)
+                NativeLogger.i("VpnService", "Starting SOCKS relay (fd=${fd.fd}, socksPort=$socksPort)")
+                startSocksRelay(fd.fd, socksPort)
                 updateStatus("CONNECTED", "Connected")
                 updateNotification("Connected")
                 NativeLogger.i("VpnService", "VPN fully connected!")
