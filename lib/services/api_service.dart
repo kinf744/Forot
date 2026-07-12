@@ -106,11 +106,13 @@ class ApiService {
     required String activationCode,
     required String mode,
     String tier = '150',
+    String isp = '',
   }) async {
     try {
       final qParams = <String, String>{
         'uuid': uuid, 'code': activationCode, 'mode': mode, 'tier': tier,
       };
+      if (isp.isNotEmpty) qParams['isp'] = isp;
       final uri = Uri.parse('$baseUrl/api/v1/config/auto').replace(queryParameters: qParams);
       final response = await http.get(
         uri,

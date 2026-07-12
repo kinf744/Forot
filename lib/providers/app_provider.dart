@@ -178,11 +178,14 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
 
     if (_user == null) return;
+    final knownIsps = ['mtn', 'orange', 'camtel', 'blue'];
+    final qIsp = knownIsps.contains(_ispLabel.toLowerCase()) ? _ispLabel.toLowerCase() : '';
     final result = await ApiService.getAutoConfig(
       uuid: _user!.uuid,
       activationCode: _user!.activationCode,
       mode: 'normal',
       tier: _currentTier,
+      isp: qIsp,
     );
     if (!(result['success'] == true)) {
       _errorMessage = 'Configuration indisponible';
@@ -300,13 +303,32 @@ class AppProvider extends ChangeNotifier {
       return false;
     }
     _modeLabel = '';
+
+    // Detect network provider natively (MCC/MNC for cellular, ASN for WiFi)
+    String isp = '';
+    try {
+      final netInfo = await VpnService.detectNetworkProvider();
+      if (netInfo['isDetected'] == true) {
+        isp = (netInfo['isp'] as String? ?? '').toLowerCase();
+        if (isp.contains('mtn')) isp = 'mtn';
+        else if (isp.contains('orange')) isp = 'orange';
+        else if (isp.contains('camtel')) isp = 'camtel';
+        else if (isp.contains('blue') || isp.contains('vodafone') || isp.contains('africell')) isp = 'blue';
+        else isp = '';
+      }
+      FileLogger().i('AppProvider', 'autoConfig: native ISP detection -> "$isp" (raw=${netInfo['isp']})');
+    } catch (e) {
+      FileLogger().w('AppProvider', 'autoConfig: native detection failed: $e');
+    }
+
     final result = await ApiService.getAutoConfig(
       uuid: _user!.uuid,
       activationCode: _user!.activationCode,
       mode: 'normal',
       tier: '150',
+      isp: isp,
     );
-    FileLogger().i('AppProvider', 'autoConfig: API result success=${result['success']}');
+    FileLogger().i('AppProvider', 'autoConfig: API result success=${result['success']} isp=$isp');
     if (result['success'] != true) {
       FileLogger().w('AppProvider', 'autoConfig: API failed: ${result['message']} — keeping cached config if available');
       if (_serverConfig != null) {

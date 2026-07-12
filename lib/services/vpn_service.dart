@@ -93,6 +93,17 @@ class VpnService {
     }
   }
 
+  static Future<Map<String, dynamic>> detectNetworkProvider() async {
+    try {
+      return await _channel.invokeMethod('detectNetworkProvider') ??
+          {'providerName': 'Unknown', 'isDetected': false};
+    } on PlatformException {
+      return {'providerName': 'Unknown', 'isDetected': false};
+    } catch (_) {
+      return {'providerName': 'Unknown', 'isDetected': false};
+    }
+  }
+
   static Stream<Map<String, dynamic>> get statusEventStream {
     return _statusChannel.receiveBroadcastStream().map((event) {
       return {

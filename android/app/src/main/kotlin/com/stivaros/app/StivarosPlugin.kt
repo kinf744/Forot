@@ -242,6 +242,20 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 }
                 result.success(true)
             }
+            "detectNetworkProvider" -> {
+                val provider = NetworkProviderDetector.detect(context)
+                NativeLogger.i("Plugin", "detectNetworkProvider: ${provider.providerName} (${provider.connectionType}) isp=${provider.isp}")
+                result.success(mapOf(
+                    "connectionType" to provider.connectionType,
+                    "providerName" to provider.providerName,
+                    "country" to provider.country,
+                    "mcc" to (provider.mcc ?: ""),
+                    "mnc" to (provider.mnc ?: ""),
+                    "isp" to (provider.isp ?: ""),
+                    "isDetected" to provider.isDetected,
+                    "isVpnConnected" to provider.isVpnConnected
+                ))
+            }
             "getNativeLog" -> {
                 val nativeLog = File(context.filesDir, "native_log.txt")
                 if (nativeLog.exists()) {
