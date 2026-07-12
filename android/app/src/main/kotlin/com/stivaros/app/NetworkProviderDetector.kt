@@ -399,11 +399,11 @@ object NetworkProviderDetector {
     private fun findDefaultDataSubId(context: Context): Int? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return null
         return try {
-            val sm = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? SubscriptionManager
-            sm?.let { subMgr ->
-                val subId = subMgr.defaultDataSubscriptionId
+            val sm = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager?
+            if (sm != null) {
+                val subId = sm.getDefaultDataSubscriptionId()
                 if (subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) subId else null
-            }
+            } else null
         } catch (_: Exception) { null }
     }
 
