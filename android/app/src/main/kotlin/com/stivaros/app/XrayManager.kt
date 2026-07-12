@@ -216,13 +216,41 @@ class XrayManager(private val context: Context) {
             Log.i(TAG, "Using cached Xray binary")
             return target
         }
+
+        // Try extracting from APK assets first (bundled during build)
+        try {
+            NativeLogger.i("XrayManager", "Extracting Xray from APK assets...")
+            context.assets.open("xray/xray.zip").use { zipInput ->
+                val zis = java.util.zip.ZipInputStream(zipInput)
+                var entry = zis.nextEntry
+                var found = false
+                while (entry != null) {
+                    NativeLogger.i("XrayManager", "Zip entry: ${entry.name}")
+                    if (entry.name == "xray") {
+                        target.outputStream().use { out -> zis.copyTo(out) }
+                        found = true
+                        break
+                    }
+                    entry = zis.nextEntry
+                }
+                zis.closeEntry()
+                zis.close()
+                if (!found) throw Exception("xray binary not found in assets zip")
+            }
+            target.setExecutable(true)
+            NativeLogger.i("XrayManager", "Extracted from assets: ${target.absolutePath} (size=${target.length()})")
+            return target
+        } catch (e: Exception) {
+            NativeLogger.w("XrayManager", "Asset extraction failed: ${e.message} — falling back to download")
+        }
+
         return try {
             NativeLogger.i("XrayManager", "Downloading Xray binary from API server...")
             Log.i(TAG, "Downloading Xray binary from API server...")
             val url = URL("https://api-v1.kingom.ggff.net:5443/api/v1/files/xray.zip")
             val conn = url.openConnection() as HttpURLConnection
             conn.connectTimeout = 30000
-            conn.readTimeout = 120000
+            conn.readTimeout = 300000
             NativeLogger.i("XrayManager", "Connected to API server, reading zip...")
             conn.inputStream.use { zipInput ->
                 val zipBytes = zipInput.readBytes()
