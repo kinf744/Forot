@@ -178,13 +178,11 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
 
     if (_user == null) return;
-    _ispLabel = await ApiService.detectIsp();
     final result = await ApiService.getAutoConfig(
       uuid: _user!.uuid,
       activationCode: _user!.activationCode,
       mode: 'normal',
       tier: _currentTier,
-      isp: _ispLabel,
     );
     if (!(result['success'] == true)) {
       _errorMessage = 'Configuration indisponible';
@@ -195,6 +193,7 @@ class AppProvider extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    _ispLabel = result['isp'] as String? ?? '';
     final config = ServerConfig.fromJson(result);
     _serverConfig = config;
     _modeLabel = _currentTier == '150' ? '150Mo' : '100Mo';
@@ -301,20 +300,13 @@ class AppProvider extends ChangeNotifier {
       return false;
     }
     _modeLabel = '';
-    FileLogger().i('AppProvider', 'autoConfig: detecting ISP...');
-    _ispLabel = await ApiService.detectIsp();
-    FileLogger().i('AppProvider', 'autoConfig: ISP=$_ispLabel');
-
-    FileLogger().i('AppProvider', 'autoConfig: fetching config UUID=${_user!.uuid} tier=150 isp=$_ispLabel');
     final result = await ApiService.getAutoConfig(
       uuid: _user!.uuid,
       activationCode: _user!.activationCode,
       mode: 'normal',
       tier: '150',
-      isp: _ispLabel,
     );
-    FileLogger().i('AppProvider', 'autoConfig: API result keys=${result.keys} success=${result['success']}');
-
+    FileLogger().i('AppProvider', 'autoConfig: API result success=${result['success']}');
     if (result['success'] != true) {
       FileLogger().w('AppProvider', 'autoConfig: API failed: ${result['message']} — keeping cached config if available');
       if (_serverConfig != null) {
@@ -322,6 +314,7 @@ class AppProvider extends ChangeNotifier {
       }
       return false;
     }
+    _ispLabel = result['isp'] as String? ?? '';
     final config = ServerConfig.fromJson(result);
     _serverConfig = config;
     _modeLabel = '150Mo';

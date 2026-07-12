@@ -101,37 +101,16 @@ class ApiService {
     }
   }
 
-  static Future<String> detectIsp() async {
-    try {
-      final resp = await http.get(
-        Uri.parse('http://ip-api.com/json/?fields=isp,org'),
-        headers: {'User-Agent': 'Stivaros/1.0'},
-      ).timeout(const Duration(seconds: 5));
-      final data = jsonDecode(resp.body) as Map<String, dynamic>;
-      final isp = ((data['isp'] as String?) ?? (data['org'] as String?) ?? '').toLowerCase();
-      if (isp.contains('mtn')) return 'mtn';
-      if (isp.contains('orange')) return 'orange';
-      if (isp.contains('camtel')) return 'camtel';
-      if (isp.contains('blue') || isp.contains('africell')) return 'blue';
-      if (isp.contains('vodafone')) return 'blue';
-      return 'unknown';
-    } catch (_) {
-      return 'unknown';
-    }
-  }
-
   static Future<Map<String, dynamic>> getAutoConfig({
     required String uuid,
     required String activationCode,
     required String mode,
     String tier = '150',
-    String? isp,
   }) async {
     try {
       final qParams = <String, String>{
         'uuid': uuid, 'code': activationCode, 'mode': mode, 'tier': tier,
       };
-      if (isp != null && isp.isNotEmpty) qParams['isp'] = isp;
       final uri = Uri.parse('$baseUrl/api/v1/config/auto').replace(queryParameters: qParams);
       final response = await http.get(
         uri,
