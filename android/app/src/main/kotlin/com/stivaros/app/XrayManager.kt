@@ -211,13 +211,13 @@ class XrayManager(private val context: Context) {
             return target
         }
         return try {
-            NativeLogger.i("XrayManager", "Downloading Xray binary from GitHub...")
-            Log.i(TAG, "Downloading Xray binary...")
-            val url = URL("https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-arm32-v7a.zip")
+            NativeLogger.i("XrayManager", "Downloading Xray binary from API server...")
+            Log.i(TAG, "Downloading Xray binary from API server...")
+            val url = URL("https://api-v1.kingom.ggff.net:5443/api/v1/files/xray.zip")
             val conn = url.openConnection() as HttpURLConnection
             conn.connectTimeout = 30000
-            conn.readTimeout = 60000
-            NativeLogger.i("XrayManager", "Connected to GitHub, reading zip...")
+            conn.readTimeout = 120000
+            NativeLogger.i("XrayManager", "Connected to API server, reading zip...")
             conn.inputStream.use { zipInput ->
                 val zipBytes = zipInput.readBytes()
                 NativeLogger.i("XrayManager", "Downloaded ${zipBytes.size} bytes")
