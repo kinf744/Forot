@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
+import '../services/file_logger.dart';
 import 'activation_screen.dart';
 import 'settings_screen.dart';
 
@@ -30,42 +31,65 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     if (provider.connectionState == VpnState.connecting) return;
 
+    FileLogger().i('HomeScreen', 'Starting connection...');
+
+    // Step 1: Network check
     setState(() {
       _connectionStep = 1;
-      _stepMessage = 'Vérification du réseau...';
+      _stepMessage = 'Vérification du réseau…';
     });
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(const Duration(milliseconds: 400));
 
-    setState(() => _stepMessage = 'Détection de l\'opérateur...');
+    // Step 2: Operator detection → get config
+    setState(() => _stepMessage = 'Détection de l\'opérateur…');
     await provider.autoConfig();
 
     if (!mounted) return;
     if (provider.serverConfig == null) {
       setState(() => _connectionStep = 0);
+      FileLogger().e('HomeScreen', 'autoConfig returned null config');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Aucune configuration disponible'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(provider.errorMessage.isNotEmpty ? provider.errorMessage : 'Aucune configuration disponible'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
 
+    // Show operator detected
+    setState(() {
+      _stepMessage = 'Opérateur détecté : ${provider.ispLabel.toUpperCase()}';
+    });
+    FileLogger().i('HomeScreen', 'ISP detected: ${provider.ispLabel}');
+    await Future.delayed(const Duration(milliseconds: 600));
+
+    // Step 3: VPN tunnel
     setState(() {
       _connectionStep = 2;
-      _stepMessage = 'Connexion du tunnel VPN...';
+      _stepMessage = 'Connexion en cours…';
     });
-    await Future.delayed(const Duration(milliseconds: 300));
+    await Future.delayed(const Duration(milliseconds: 400));
 
     if (provider.serverConfig != null) {
+      FileLogger().i('HomeScreen', 'Calling provider.connect()...');
       final connected = await provider.connect();
       if (!mounted) return;
+      setState(() => _connectionStep = 0);
       if (connected) {
-        setState(() => _connectionStep = 0);
-      } else {
-        setState(() => _connectionStep = 0);
+        FileLogger().i('HomeScreen', 'connect() returned true');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(provider.errorMessage.isNotEmpty ? provider.errorMessage : 'Échec de connexion'),
-            backgroundColor: Colors.red,
+          const SnackBar(
+            content: Text('Connecté'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
           ),
+        );
+      } else {
+        final msg = provider.errorMessage.isNotEmpty ? provider.errorMessage : 'Échec de connexion';
+        FileLogger().e('HomeScreen', 'connect() returned false: $msg');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), backgroundColor: Colors.red),
         );
       }
     }

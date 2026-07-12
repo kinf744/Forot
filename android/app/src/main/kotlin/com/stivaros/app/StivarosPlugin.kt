@@ -2,10 +2,14 @@ package com.stivaros.app
 
 import android.app.usage.NetworkStatsManager
 import android.content.BroadcastReceiver
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.TrafficStats
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -14,6 +18,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
+import java.io.File
 
 class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
@@ -22,6 +27,7 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private lateinit var context: Context
     private var xrayManager: XrayManager? = null
     private var activityBinding: ActivityPluginBinding? = null
+    private var pendingConnectParams: Map<String, Any?>? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
@@ -138,6 +144,36 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                     result.success(mapOf("rxBytes" to rxBytes, "txBytes" to txBytes))
                 } catch (e: Exception) {
                     result.success(mapOf("rxBytes" to 0L, "txBytes" to 0L))
+                }
+            }
+            "saveToDownloads" -> {
+                val source = call.argument<String>("source") ?: ""
+                try {
+                    val srcFile = File(source)
+                    if (!srcFile.exists()) {
+                        result.success(false)
+                        return@onMethodCall
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        val values = ContentValues().apply {
+                            put(MediaStore.Downloads.DISPLAY_NAME, "mtn.txt")
+                            put(MediaStore.Downloads.MIME_TYPE, "text/plain")
+                            put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                        }
+                        val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                        if (uri != null) {
+                            context.contentResolver.openOutputStream(uri)?.use { out ->
+                                srcFile.inputStream().use { it.copyTo(out) }
+                            }
+                        }
+                    } else {
+                        val dest = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "mtn.txt")
+                        srcFile.copyTo(dest, overwrite = true)
+                    }
+                    result.success(true)
+                } catch (e: Exception) {
+                    android.util.Log.e("StivarosPlugin", "saveToDownloads error: ${e.message}")
+                    result.success(false)
                 }
             }
             else -> result.notImplemented()

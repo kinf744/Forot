@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
+import '../services/file_logger.dart';
 import 'activation_screen.dart';
 import 'home_screen.dart';
 
@@ -23,13 +24,14 @@ class _SplashScreenState extends State<SplashScreen> {
     final provider = context.read<AppProvider>();
     try {
       await provider.init().timeout(const Duration(seconds: 10));
-    } catch (_) {
-      // init failed — will still navigate below
+    } catch (e) {
+      FileLogger().e('SplashScreen', 'init timeout/error: $e');
     }
     if (!mounted) return;
     await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
 
+    FileLogger().i('SplashScreen', 'navigating: isActivated=${provider.isActivated} deviceId=${provider.deviceId}');
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(

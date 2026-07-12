@@ -6,6 +6,7 @@ import '../models/server_config.dart';
 import '../services/vpn_service.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
+import '../services/file_logger.dart';
 
 enum VpnState { disconnected, connecting, connected, error }
 
@@ -55,29 +56,39 @@ class AppProvider extends ChangeNotifier {
   String get ispLabel => _ispLabel;
 
   Future<void> init() async {
+    await FileLogger().init();
+    FileLogger().i('AppProvider', 'init() started');
     try {
       _user = await StorageService.getUser();
+      FileLogger().i('AppProvider', 'user loaded: ${_user?.uuid ?? 'null'}');
       _serverConfig = await StorageService.getServerConfig();
       _hardwareId = await VpnService.getHardwareId();
-    } catch (_) {
-      // ignore non-critical init errors
+      FileLogger().i('AppProvider', 'hardwareId: $_hardwareId');
+    } catch (e) {
+      FileLogger().e('AppProvider', 'init part1 error: $e');
     }
     try {
       _deviceId = await StorageService.getString('device_uuid');
+      FileLogger().i('AppProvider', 'device_uuid from storage: "$_deviceId"');
       if (_deviceId.isEmpty) {
         _deviceId = _generateUuid();
+        FileLogger().i('AppProvider', 'generated new uuid: $_deviceId');
         await StorageService.setString('device_uuid', _deviceId);
       }
-    } catch (_) {
+    } catch (e) {
+      FileLogger().e('AppProvider', 'init uuid error: $e');
       if (_deviceId.isEmpty) {
         _deviceId = _generateUuid();
+        FileLogger().i('AppProvider', 'generated uuid in catch: $_deviceId');
       }
     }
     if (_deviceId.isEmpty) {
       _deviceId = _generateUuid();
+      FileLogger().i('AppProvider', 'final fallback uuid: $_deviceId');
     }
     _listenStatus();
     notifyListeners();
+    FileLogger().i('AppProvider', 'init() complete, deviceId: $_deviceId');
   }
 
   String _generateUuid() {
@@ -113,6 +124,7 @@ class AppProvider extends ChangeNotifier {
           break;
         case 'ERROR':
           _connectionState = VpnState.error;
+          FileLogger().e('AppProvider', 'statusStream ERROR');
           if (_quotaExhausted && !_isHandlingQuota) {
             _isHandlingQuota = true;
             _handleQuotaExhaustion().then((_) => _isHandlingQuota = false);
@@ -136,15 +148,18 @@ class AppProvider extends ChangeNotifier {
   void _detectQuotaExhaustion() {
     if (_wasShortConnection()) {
       _quotaExhausted = true;
+      FileLogger().i('AppProvider', 'Quota exhaustion detected (short connection)');
     }
   }
 
   Future<void> _handleQuotaExhaustion() async {
+    FileLogger().i('AppProvider', '_handleQuotaExhaustion: tier=$_currentTier retry=$_retryCount');
     _quotaExhausted = false;
     if (_currentTier == '150') {
       _currentTier = '100';
       _retryCount = 0;
       _errorMessage = 'Basculement vers 100Mo...';
+      FileLogger().i('AppProvider', 'Switching to tier 100');
     } else {
       _retryCount++;
       if (_retryCount >= _maxRetries) {
@@ -152,10 +167,12 @@ class AppProvider extends ChangeNotifier {
         _connectionState = VpnState.disconnected;
         _currentTier = '150';
         _retryCount = 0;
+        FileLogger().e('AppProvider', 'Max retries reached, giving up');
         notifyListeners();
         return;
       }
       _errorMessage = 'Tentative $_retryCount/$_maxRetries...';
+      FileLogger().i('AppProvider', 'Retry $_retryCount/$_maxRetries');
     }
     _connectionState = VpnState.connecting;
     notifyListeners();
@@ -174,6 +191,7 @@ class AppProvider extends ChangeNotifier {
       _connectionState = VpnState.disconnected;
       _currentTier = '150';
       _retryCount = 0;
+      FileLogger().e('AppProvider', 'Quota handler: config fetch failed');
       notifyListeners();
       return;
     }
@@ -182,6 +200,7 @@ class AppProvider extends ChangeNotifier {
     _modeLabel = _currentTier == '150' ? '150Mo' : '100Mo';
     notifyListeners();
 
+    FileLogger().i('AppProvider', 'Quota handler: connecting with tier=$_currentTier');
     final connected = await VpnService.connect(
       address: config.address,
       port: config.port,
@@ -195,12 +214,16 @@ class AppProvider extends ChangeNotifier {
       flow: config.flow ?? '',
     );
     if (connected) {
+      FileLogger().i('AppProvider', 'Quota handler: connected');
       await _recordBaseline();
       _startTrafficPolling();
+    } else {
+      FileLogger().e('AppProvider', 'Quota handler: connect failed');
     }
   }
 
   Future<void> _handleError(String msg) async {
+    FileLogger().e('AppProvider', '_handleError: $msg');
     if (_connectionState != VpnState.connected && _connectionState != VpnState.connecting) {
       return;
     }
@@ -232,6 +255,7 @@ class AppProvider extends ChangeNotifier {
     required String phoneNumber,
     required String activationCode,
   }) async {
+    FileLogger().i('AppProvider', 'activate() phone=$phoneNumber code=$activationCode deviceId=$_deviceId');
     final result = await ApiService.verifyActivation(
       uuid: _deviceId,
       phoneNumber: phoneNumber,
@@ -240,6 +264,7 @@ class AppProvider extends ChangeNotifier {
     );
 
     if (result['success'] == true) {
+      FileLogger().i('AppProvider', 'activation SUCCESS');
       _user = User(
         uuid: _deviceId,
         phoneNumber: phoneNumber,
@@ -251,15 +276,23 @@ class AppProvider extends ChangeNotifier {
       return true;
     } else {
       _errorMessage = result['message'] ?? 'Activation failed';
+      FileLogger().e('AppProvider', 'activation FAILED: $_errorMessage');
       notifyListeners();
       return false;
     }
   }
 
   Future<bool> autoConfig() async {
-    if (_user == null) return false;
+    if (_user == null) {
+      FileLogger().e('AppProvider', 'autoConfig: _user is null');
+      return false;
+    }
     _modeLabel = '';
+    FileLogger().i('AppProvider', 'autoConfig: detecting ISP...');
     _ispLabel = await ApiService.detectIsp();
+    FileLogger().i('AppProvider', 'autoConfig: ISP=$_ispLabel');
+
+    FileLogger().i('AppProvider', 'autoConfig: fetching config UUID=${_user!.uuid} tier=150 isp=$_ispLabel');
     final result = await ApiService.getAutoConfig(
       uuid: _user!.uuid,
       activationCode: _user!.activationCode,
@@ -267,12 +300,18 @@ class AppProvider extends ChangeNotifier {
       tier: '150',
       isp: _ispLabel,
     );
-    if (result['success'] != true) return false;
+    FileLogger().i('AppProvider', 'autoConfig: API result keys=${result.keys} success=${result['success']}');
+
+    if (result['success'] != true) {
+      FileLogger().e('AppProvider', 'autoConfig: API failed: ${result['message']}');
+      return false;
+    }
     final config = ServerConfig.fromJson(result);
     _serverConfig = config;
     _modeLabel = '150Mo';
     _currentTier = '150';
     await StorageService.saveServerConfig(config);
+    FileLogger().i('AppProvider', 'autoConfig: config loaded address=${config.address} port=${config.port} sni=${config.sni} xrayUuid=${config.xrayUuid}');
     notifyListeners();
     return true;
   }
@@ -280,6 +319,7 @@ class AppProvider extends ChangeNotifier {
   Future<bool> connect() async {
     if (_user == null || _serverConfig == null) {
       _errorMessage = 'Not activated';
+      FileLogger().e('AppProvider', 'connect: user or config null');
       notifyListeners();
       return false;
     }
@@ -292,6 +332,7 @@ class AppProvider extends ChangeNotifier {
     _connectionState = VpnState.connecting;
     notifyListeners();
 
+    FileLogger().i('AppProvider', 'connect: address=${config.address} port=${config.port} uuid=${config.xrayUuid ?? _user!.uuid} transport=${config.transport} sni=${config.sni}');
     final success = await VpnService.connect(
       address: config.address,
       port: config.port,
@@ -306,17 +347,20 @@ class AppProvider extends ChangeNotifier {
     );
 
     if (success) {
+      FileLogger().i('AppProvider', 'connect: VpnService returned SUCCESS');
       await _recordBaseline();
       _startTrafficPolling();
     } else {
       _connectionState = VpnState.error;
-      _errorMessage = 'VPN connection failed';
+      _errorMessage = 'Impossible de lancer le tunnel VPN';
+      FileLogger().e('AppProvider', 'connect: VpnService returned FAILED');
       notifyListeners();
     }
     return success;
   }
 
   Future<void> disconnect() async {
+    FileLogger().i('AppProvider', 'disconnect()');
     _stopTrafficPolling();
     final configId = _serverConfig?.configId;
     await VpnService.disconnect();
@@ -334,9 +378,11 @@ class AppProvider extends ChangeNotifier {
     _isHandlingQuota = false;
     StorageService.clearServerConfig();
     notifyListeners();
+    FileLogger().i('AppProvider', 'disconnect() done');
   }
 
   Future<void> logout() async {
+    FileLogger().i('AppProvider', 'logout()');
     await disconnect();
     await StorageService.clearAll();
     _user = null;
@@ -345,6 +391,7 @@ class AppProvider extends ChangeNotifier {
     _errorMessage = '';
     _deviceId = await StorageService.getString('device_uuid');
     notifyListeners();
+    FileLogger().i('AppProvider', 'logout() done');
   }
 
   void clearError() {
