@@ -19,8 +19,11 @@ class _HomeScreenState extends State<HomeScreen> {
   String _stepMessage = '';
 
   @override
-  void dispose() {
-    super.dispose();
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AppProvider>().loadConfigs();
+    });
   }
 
   Future<void> _startConnection(AppProvider provider) async {
@@ -35,16 +38,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
     FileLogger().i('HomeScreen', 'Starting connection...');
 
-    // Step 1: Network check
+    // Step 1: Ensure config is selected
     setState(() {
       _connectionStep = 1;
-      _stepMessage = 'Vérification du réseau…';
+      _stepMessage = 'Préparation…';
     });
-    await Future.delayed(const Duration(milliseconds: 400));
-
-    // Step 2: Operator detection → get config
-    setState(() => _stepMessage = 'Détection de l\'opérateur…');
     await provider.autoConfig();
+    await Future.delayed(const Duration(milliseconds: 300));
 
     if (!mounted) return;
     if (provider.serverConfig == null) {
@@ -59,19 +59,12 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    // Show operator detected
-    setState(() {
-      _stepMessage = 'Opérateur détecté : ${provider.ispLabel.toUpperCase()}';
-    });
-    FileLogger().i('HomeScreen', 'ISP detected: ${provider.ispLabel}');
-    await Future.delayed(const Duration(milliseconds: 600));
-
-    // Step 3: VPN tunnel
+    // Step 2: VPN tunnel
     setState(() {
       _connectionStep = 2;
       _stepMessage = 'Connexion en cours…';
     });
-    await Future.delayed(const Duration(milliseconds: 400));
+    await Future.delayed(const Duration(milliseconds: 300));
 
     if (provider.serverConfig != null) {
       FileLogger().i('HomeScreen', 'Calling provider.connect()...');
@@ -172,7 +165,36 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: _getStatusColor(provider),
                   ),
                 ),
-                const SizedBox(height: 16),
+                // Config selector
+                if (provider.configs.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        value: provider.selectedConfigIndex,
+                        dropdownColor: const Color(0xFF1E1E2C),
+                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        icon: const Icon(Icons.expand_more, color: Colors.white54),
+                        isDense: true,
+                        hint: const Text('Choisir une config', style: TextStyle(color: Colors.white54)),
+                        items: List.generate(provider.configs.length, (i) {
+                          final c = provider.configs[i];
+                          return DropdownMenuItem(
+                            value: i,
+                            child: Text(c['label'] as String? ?? 'Config ${i + 1}'),
+                          );
+                        }),
+                        onChanged: (index) {
+                          if (index != null) provider.selectConfig(index);
+                        },
+                      ),
+                    ),
+                  ),
 
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),

@@ -133,6 +133,30 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> getUserConfigs({
+    required String uuid,
+    required String activationCode,
+  }) async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/api/v1/user/configs?uuid=$uuid&code=$activationCode'),
+            headers: {'Content-Type': 'application/json'},
+          )
+          .timeout(timeout);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return {'success': false, 'message': 'Failed to get configs (${response.statusCode})'};
+    } catch (e) {
+      final msg = e.toString();
+      if (msg.contains('TimeoutException')) {
+        return {'success': false, 'message': 'Délai d\'attente dépassé. Vérifiez votre connexion internet.'};
+      }
+      return {'success': false, 'message': 'Erreur réseau: $e'};
+    }
+  }
+
   static Future<void> deleteConfig({
     required int configId,
   }) async {

@@ -29,6 +29,9 @@ class AppProvider extends ChangeNotifier {
   bool _quotaExhausted = false;
   bool _isHandlingQuota = false;
 
+  List<Map<String, dynamic>> _configs = [];
+  int? _selectedConfigIndex;
+
   int _rxBytes = 0;
   int _txBytes = 0;
   int _rxBaseline = 0;
@@ -54,6 +57,11 @@ class AppProvider extends ChangeNotifier {
   String _ispLabel = '';
   String get modeLabel => _modeLabel;
   String get ispLabel => _ispLabel;
+  List<Map<String, dynamic>> get configs => _configs;
+  int? get selectedConfigIndex => _selectedConfigIndex;
+  String get selectedConfigLabel => _selectedConfigIndex != null && _selectedConfigIndex! < _configs.length
+      ? (_configs[_selectedConfigIndex!]['label'] as String? ?? 'Config ${_selectedConfigIndex! + 1}')
+      : 'Aucune config';
 
   Future<void> init() async {
     await FileLogger().init();
@@ -178,29 +186,14 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
 
     if (_user == null) return;
-    final knownIsps = ['mtn', 'orange', 'camtel', 'blue'];
-    final qIsp = knownIsps.contains(_ispLabel.toLowerCase()) ? _ispLabel.toLowerCase() : '';
-    final result = await ApiService.getAutoConfig(
-      uuid: _user!.uuid,
-      activationCode: _user!.activationCode,
-      mode: 'normal',
-      tier: _currentTier,
-      isp: qIsp,
-    );
-    if (!(result['success'] == true)) {
-      _errorMessage = 'Configuration indisponible';
+    if (_configs.isEmpty || _selectedConfigIndex == null) {
+      _errorMessage = 'Aucune configuration disponible';
       _connectionState = VpnState.disconnected;
-      _currentTier = '150';
-      _retryCount = 0;
-      FileLogger().e('AppProvider', 'Quota handler: config fetch failed');
       notifyListeners();
       return;
     }
-    _ispLabel = result['isp'] as String? ?? '';
-    final config = ServerConfig.fromJson(result);
-    _serverConfig = config;
-    _modeLabel = _currentTier == '150' ? '150Mo' : '100Mo';
-    notifyListeners();
+    final cfg = _configs[_selectedConfigIndex!];
+    _applyConfig(cfg);
 
     FileLogger().i('AppProvider', 'Quota handler: connecting with tier=$_currentTier');
     final connected = await VpnService.connect(
@@ -297,6 +290,52 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> loadConfigs() async {
+    if (_user == null) return false;
+    final result = await ApiService.getUserConfigs(
+      uuid: _user!.uuid,
+      activationCode: _user!.activationCode,
+    );
+    if (result['success'] == true && result['configs'] is List) {
+      _configs = (result['configs'] as List).cast<Map<String, dynamic>>();
+      if (_configs.isNotEmpty && _selectedConfigIndex == null) {
+        _selectedConfigIndex = 0;
+        _applyConfig(_configs[0]);
+      }
+      notifyListeners();
+      return true;
+    }
+    FileLogger().e('AppProvider', 'loadConfigs failed: ${result['message']}');
+    return false;
+  }
+
+  void selectConfig(int index) {
+    if (index < 0 || index >= _configs.length) return;
+    _selectedConfigIndex = index;
+    _applyConfig(_configs[index]);
+  }
+
+  void _applyConfig(Map<String, dynamic> cfg) {
+    _serverConfig = ServerConfig.fromJson(cfg);
+    _ispLabel = (cfg['isp'] as String?) ?? '';
+    _modeLabel = (cfg['label'] as String?) ?? '${cfg['tier']}Mo';
+    _currentTier = (cfg['tier'] as String?) ?? '150';
+    final existing = _user;
+    _user = User(
+      uuid: existing?.uuid ?? _deviceId,
+      phoneNumber: existing?.phoneNumber ?? '',
+      activationCode: existing?.activationCode ?? '',
+      serverAddress: _serverConfig!.address,
+      serverPort: _serverConfig!.port,
+      serverProtocol: _serverConfig!.protocol,
+      serverTransport: _serverConfig!.transport,
+      serverTls: _serverConfig!.tls,
+      serverSni: _serverConfig!.sni,
+    );
+    StorageService.saveServerConfig(_serverConfig!);
+    notifyListeners();
+  }
+
   Future<bool> autoConfig() async {
     if (_user == null) {
       FileLogger().e('AppProvider', 'autoConfig: _user is null');
@@ -304,45 +343,17 @@ class AppProvider extends ChangeNotifier {
     }
     _modeLabel = '';
 
-    // Detect network provider natively (MCC/MNC for cellular, ASN for WiFi)
-    String isp = '';
-    try {
-      final netInfo = await VpnService.detectNetworkProvider();
-      if (['HIGH', 'MEDIUM', 'LOW'].contains(netInfo['confidence'])) {
-        isp = (netInfo['isp'] as String? ?? '').toLowerCase();
-        if (isp.contains('mtn')) isp = 'mtn';
-        else if (isp.contains('orange')) isp = 'orange';
-        else if (isp.contains('camtel')) isp = 'camtel';
-        else if (isp.contains('blue') || isp.contains('vodafone') || isp.contains('africell')) isp = 'blue';
-        else isp = '';
-      }
-      FileLogger().i('AppProvider', 'autoConfig: native ISP detection -> "$isp" (raw=${netInfo['isp']})');
-    } catch (e) {
-      FileLogger().w('AppProvider', 'autoConfig: native detection failed: $e');
+    if (_configs.isEmpty) {
+      await loadConfigs();
     }
 
-    final result = await ApiService.getAutoConfig(
-      uuid: _user!.uuid,
-      activationCode: _user!.activationCode,
-      mode: 'normal',
-      tier: '150',
-      isp: isp,
-    );
-    FileLogger().i('AppProvider', 'autoConfig: API result success=${result['success']} isp=$isp');
-    if (result['success'] != true) {
-      FileLogger().w('AppProvider', 'autoConfig: API failed: ${result['message']} — keeping cached config if available');
-      if (_serverConfig != null) {
-        return true;
-      }
-      return false;
+    if (_configs.isEmpty || _selectedConfigIndex == null) {
+      FileLogger().w('AppProvider', 'autoConfig: no configs available');
+      return _serverConfig != null;
     }
-    _ispLabel = result['isp'] as String? ?? '';
-    final config = ServerConfig.fromJson(result);
-    _serverConfig = config;
-    _modeLabel = '150Mo';
-    _currentTier = '150';
-    await StorageService.saveServerConfig(config);
-    FileLogger().i('AppProvider', 'autoConfig: config loaded address=${config.address} port=${config.port} sni=${config.sni} xrayUuid=${config.xrayUuid}');
+
+    _applyConfig(_configs[_selectedConfigIndex!]);
+    FileLogger().i('AppProvider', 'autoConfig: using config ${_selectedConfigIndex} -> ${_serverConfig?.address}');
     notifyListeners();
     return true;
   }

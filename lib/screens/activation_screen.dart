@@ -51,7 +51,7 @@ class _ActivationScreenState extends State<ActivationScreen> {
     if (success) {
       setState(() => _statusMessage = 'Téléchargement des configurations...');
 
-      await provider.autoConfig();
+      await provider.loadConfigs();
 
       if (!mounted) return;
 
