@@ -218,19 +218,18 @@ class XrayManager(private val context: Context) {
             return target
         }
 
-        // Try native lib from jniLibs (bundled in APK)
+        // Use directly from nativeLibraryDir (Android extrait avec bonnes permissions)
         try {
             val nativeFile = File(context.applicationInfo.nativeLibraryDir, "libxray.so")
             if (nativeFile.exists()) {
+                NativeLogger.i("XrayManager", "Using nativeLib directly: ${nativeFile.absolutePath} (size=${nativeFile.length()})")
+                // Cache copy for subsequent launches
                 nativeFile.copyTo(target, overwrite = true)
-                if (!target.setExecutable(true)) {
-                    Runtime.getRuntime().exec(arrayOf("chmod", "755", target.absolutePath)).waitFor()
-                }
-                NativeLogger.i("XrayManager", "Copied from nativeLib: ${target.absolutePath} (size=${target.length()})")
-                return target
+                target.setExecutable(true)
+                return nativeFile
             }
         } catch (e: Exception) {
-            NativeLogger.w("XrayManager", "nativeLib extraction: ${e.message}")
+            NativeLogger.w("XrayManager", "nativeLib: ${e.message}")
         }
 
         return try {
