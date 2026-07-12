@@ -401,8 +401,9 @@ object NetworkProviderDetector {
         return try {
             val sm = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager?
             if (sm != null) {
-                val subId = sm.getDefaultDataSubscriptionId()
-                if (subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) subId else null
+                val method = sm::class.java.getMethod("getDefaultDataSubscriptionId")
+                val subId = method.invoke(sm) as Int
+                if (subId != -1) subId else null
             } else null
         } catch (_: Exception) { null }
     }
