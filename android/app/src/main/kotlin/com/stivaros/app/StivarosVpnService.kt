@@ -88,6 +88,11 @@ class StivarosVpnService : VpnService() {
                     val zivpnPassword = intent.getStringExtra("zivpnPassword") ?: uuid
                     val zivpnObfs = intent.getStringExtra("zivpnObfs") ?: "hu``hqb`c"
 
+                    zivpnManager?.errorCallback = { msg ->
+                        NativeLogger.e("VpnService", "Zivpn error callback: $msg")
+                        updateStatus("ERROR", msg)
+                    }
+
                     zivpnManager?.start(serverAddress, zivpnPort, zivpnPassword, zivpnObfs)
                     socksPort = zivpnManager?.getSocksPort() ?: 0
                     NativeLogger.i("VpnService", "Zivpn started, SOCKS port=$socksPort")
