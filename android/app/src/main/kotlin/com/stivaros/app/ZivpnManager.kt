@@ -107,7 +107,7 @@ class ZivpnManager(private val context: Context) {
 
                 val proc = pb.start()
                 uzProcesses.add(proc)
-                NativeLogger.i(TAG, "uz_core[$index] PID=${proc.pid()}")
+                NativeLogger.i(TAG, "uz_core[$index] started")
 
                 Thread {
                     try {
@@ -294,7 +294,7 @@ class ZivpnManager(private val context: Context) {
         val count = uzProcesses.size
         uzProcesses.forEachIndexed { i, proc ->
             try {
-                NativeLogger.i(TAG, "Destroying uz_core[$i] PID=${proc.pid()}")
+                NativeLogger.i(TAG, "Destroying uz_core[$i]")
                 proc.destroyForcibly()
             } catch (_: Exception) {}
         }
