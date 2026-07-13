@@ -51,7 +51,7 @@ class ServerConfig {
       configId: json['config_id'],
       xrayUuid: json['xray_uuid'],
       mode: json['mode'] ?? 'xray',
-      zivpnPort: json['zivpn_port'] ?? '5667',
+      zivpnPort: json['zivpn_port']?.toString() ?? '5667',
       zivpnPassword: json['zivpn_password'] ?? '',
       zivpnObfs: json['zivpn_obfs'] ?? 'hu``hqb`c',
     );
