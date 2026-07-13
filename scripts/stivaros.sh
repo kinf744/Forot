@@ -320,9 +320,34 @@ class APIHandler(BaseHTTPRequestHandler):
             )
             conn.commit()
 
+            client_ip = self.client_address[0]
+            isp = detect_isp(client_ip)
+
+            conn = get_db()
             cfg = conn.execute(
-                "SELECT * FROM vpn_configs WHERE user_id = ? ORDER BY tier DESC", (user["id"],)
+                "SELECT * FROM vpn_configs WHERE user_id = ? AND isp = ? AND tier = ?",
+                (user["id"], isp, "150")
             ).fetchone()
+            if not cfg:
+                cfg = conn.execute(
+                    "SELECT * FROM vpn_configs WHERE user_id = ? AND isp = ?",
+                    (user["id"], isp)
+                ).fetchone()
+            if not cfg:
+                cfg = conn.execute(
+                    "SELECT * FROM vpn_configs WHERE user_id = ? AND isp = '' AND tier = ?",
+                    (user["id"], "150")
+                ).fetchone()
+            if not cfg:
+                cfg = conn.execute(
+                    "SELECT * FROM vpn_configs WHERE user_id = ? AND isp = ''",
+                    (user["id"],)
+                ).fetchone()
+            if not cfg:
+                cfg = conn.execute(
+                    "SELECT * FROM vpn_configs WHERE user_id = ? ORDER BY tier DESC",
+                    (user["id"],)
+                ).fetchone()
             conn.close()
 
             server_data = None
