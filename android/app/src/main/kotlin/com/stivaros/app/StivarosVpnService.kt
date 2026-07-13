@@ -180,6 +180,7 @@ class StivarosVpnService : VpnService() {
             putExtra(EXTRA_STATUS, status)
             putExtra(EXTRA_MESSAGE, message)
         })
+        StivarosPlugin.sendStatusEvent(status, message)
     }
 
     private fun createNotificationChannel() {

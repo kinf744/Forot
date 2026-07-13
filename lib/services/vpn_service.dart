@@ -63,13 +63,15 @@ class VpnService {
     }
   }
 
-  static Future<String> getStatus() async {
+  static Future<Map<String, dynamic>> getStatus() async {
     try {
-      return await _channel.invokeMethod('getStatus') ?? 'DISCONNECTED';
+      return (await _channel.invokeMethod('getStatus') as Map<dynamic, dynamic>?)
+              ?.cast<String, dynamic>() ??
+          {'status': 'DISCONNECTED', 'message': ''};
     } on PlatformException {
-      return 'DISCONNECTED';
+      return {'status': 'DISCONNECTED', 'message': ''};
     } catch (_) {
-      return 'DISCONNECTED';
+      return {'status': 'DISCONNECTED', 'message': ''};
     }
   }
 
@@ -104,24 +106,24 @@ class VpnService {
     }
   }
 
-  static Stream<Map<String, dynamic>> get statusEventStream {
-    return _statusChannel.receiveBroadcastStream().map((event) {
-      return {
-        'status': event['status'] as String? ?? 'DISCONNECTED',
-        'message': event['message'] as String? ?? '',
-      };
-    });
-  }
+  static late final Stream<Map<String, dynamic>> _cachedStatusEventStream =
+      _statusChannel.receiveBroadcastStream().map((event) {
+    return {
+      'status': event['status'] as String? ?? 'DISCONNECTED',
+      'message': event['message'] as String? ?? '',
+    };
+  });
 
-  static Stream<String> get statusStream {
-    return statusEventStream.map((e) => e['status'] as String);
-  }
+  static late final Stream<String> _cachedStatusStream =
+      _cachedStatusEventStream.map((e) => e['status'] as String);
 
-  static Stream<String> get errorStream {
-    return statusEventStream
-        .where((e) => e['status'] == 'ERROR' && (e['message'] as String).isNotEmpty)
-        .map((e) => e['message'] as String);
-  }
+  static late final Stream<String> _cachedErrorStream = _cachedStatusEventStream
+      .where((e) => e['status'] == 'ERROR' && (e['message'] as String).isNotEmpty)
+      .map((e) => e['message'] as String);
+
+  static Stream<Map<String, dynamic>> get statusEventStream => _cachedStatusEventStream;
+  static Stream<String> get statusStream => _cachedStatusStream;
+  static Stream<String> get errorStream => _cachedErrorStream;
 
   static void dispose() {
     _statusSubscription?.cancel();

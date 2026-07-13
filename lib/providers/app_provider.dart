@@ -112,9 +112,15 @@ class AppProvider extends ChangeNotifier {
     return '${hex(8)}-${hex(4)}-4${hex(3)}-${'89ab'[rng.nextInt(4)]}${hex(3)}-${hex(12)}';
   }
 
+  Timer? _statusTimeoutTimer;
+
   void _listenStatus() {
+    _statusTimeoutTimer?.cancel();
     _statusSubscription?.cancel();
     _statusSubscription = VpnService.statusStream.listen((status) {
+      FileLogger().i('AppProvider', 'statusStream received: $status');
+      _statusTimeoutTimer?.cancel();
+      _statusTimeoutTimer = null;
       switch (status) {
         case 'CONNECTED':
           _connectionStartTime = DateTime.now();
@@ -141,12 +147,37 @@ class AppProvider extends ChangeNotifier {
           break;
       }
       notifyListeners();
+    }, onError: (err) {
+      FileLogger().e('AppProvider', 'statusStream error: $err');
     });
 
     _errorSubscription?.cancel();
     _errorSubscription = VpnService.errorStream.listen((msg) {
       _handleError(msg);
+    }, onError: (err) {
+      FileLogger().e('AppProvider', 'errorStream error: $err');
     });
+  }
+
+  Future<void> _checkStatusFallback() async {
+    try {
+      final statusMap = await VpnService.getStatus();
+      final status = statusMap['status'] as String? ?? 'DISCONNECTED';
+      final message = statusMap['message'] as String? ?? '';
+      FileLogger().i('AppProvider', '_checkStatusFallback: got $status ($message)');
+      if (status == 'CONNECTED' && _connectionState == VpnState.connecting) {
+        FileLogger().i('AppProvider', '_checkStatusFallback: native says CONNECTED, forcing state update');
+        _connectionStartTime = DateTime.now();
+        _retryCount = 0;
+        _connectionState = VpnState.connected;
+        notifyListeners();
+      } else if (status == 'CONNECTED') {
+        _connectionState = VpnState.connected;
+        notifyListeners();
+      }
+    } catch (e) {
+      FileLogger().e('AppProvider', '_checkStatusFallback error: $e');
+    }
   }
 
   bool _wasShortConnection() {
@@ -426,6 +457,11 @@ class AppProvider extends ChangeNotifier {
       // Permission dialog was shown — the VPN will start via onActivityResult
       if (_connectionState == VpnState.connecting) {
         FileLogger().i('AppProvider', 'connect: VPN permission dialog shown, waiting...');
+        _statusTimeoutTimer?.cancel();
+        _statusTimeoutTimer = Timer(const Duration(seconds: 15), () {
+          FileLogger().w('AppProvider', 'connect: 15s timeout — checking native status fallback');
+          _checkStatusFallback();
+        });
       } else {
         _connectionState = VpnState.error;
         _errorMessage = 'Impossible de lancer le tunnel VPN';
@@ -438,6 +474,8 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> disconnect() async {
     FileLogger().i('AppProvider', 'disconnect()');
+    _statusTimeoutTimer?.cancel();
+    _statusTimeoutTimer = null;
     _stopTrafficPolling();
     final configId = _serverConfig?.configId;
     await VpnService.disconnect();
