@@ -331,8 +331,8 @@ class AppProvider extends ChangeNotifier {
   Future<bool> loadConfigs() async {
     if (_user == null) return false;
 
-    final serverAddress = _user!.serverAddress.isNotEmpty
-        ? _user!.serverAddress
+    final serverAddress = (_user!.serverAddress != null && _user!.serverAddress!.isNotEmpty)
+        ? _user!.serverAddress!
         : (_serverConfig?.address ?? '');
     final uuid = _user!.uuid;
 
