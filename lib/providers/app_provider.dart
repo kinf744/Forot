@@ -196,18 +196,20 @@ class AppProvider extends ChangeNotifier {
     _applyConfig(cfg);
 
     FileLogger().i('AppProvider', 'Quota handler: connecting with tier=$_currentTier');
+    if (_serverConfig == null) return;
+    final c = _serverConfig!;
     final connected = await VpnService.connect(
-      address: config.address,
-      port: config.port,
-      uuid: config.xrayUuid ?? _user!.uuid,
-      protocol: config.protocol,
-      transport: config.transport,
-      tls: config.tls,
-      sni: config.sni,
-      host: config.host,
-      publicKey: config.publicKey ?? '',
-      shortId: config.shortId ?? '',
-      flow: config.flow ?? '',
+      address: c.address,
+      port: c.port,
+      uuid: c.xrayUuid ?? _user!.uuid,
+      protocol: c.protocol,
+      transport: c.transport,
+      tls: c.tls,
+      sni: c.sni,
+      host: c.host,
+      publicKey: c.publicKey ?? '',
+      shortId: c.shortId ?? '',
+      flow: c.flow ?? '',
     );
     if (connected) {
       FileLogger().i('AppProvider', 'Quota handler: connected');
