@@ -9,6 +9,8 @@ import android.content.IntentFilter
 import android.net.TrafficStats
 import android.os.Build
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -59,11 +61,13 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             NativeLogger.i("StivarosPlugin", "sendStatusEvent: $status $message to ${instance?.statusEventSink}")
             val sink = instance?.statusEventSink
             if (sink != null) {
-                try {
-                    sink.success(mapOf("status" to status, "message" to message))
-                    NativeLogger.i("StivarosPlugin", "sendStatusEvent: success")
-                } catch (e: Exception) {
-                    NativeLogger.e("StivarosPlugin", "sendStatusEvent error: ${e.message}")
+                Handler(Looper.getMainLooper()).post {
+                    try {
+                        sink.success(mapOf("status" to status, "message" to message))
+                        NativeLogger.i("StivarosPlugin", "sendStatusEvent: success")
+                    } catch (e: Exception) {
+                        NativeLogger.e("StivarosPlugin", "sendStatusEvent error: ${e.message}")
+                    }
                 }
             } else {
                 NativeLogger.w("StivarosPlugin", "sendStatusEvent: no EventSink, caching status")

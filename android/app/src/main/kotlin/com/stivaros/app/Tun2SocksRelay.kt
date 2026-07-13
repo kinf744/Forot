@@ -239,12 +239,20 @@ class Tun2SocksRelay(
             out.write(byteArrayOf(0x05, 0x01, 0x00, 0x03, hostBytes.size.toByte()) +
                 hostBytes + byteArrayOf((port shr 8).toByte(), (port and 0xFF).toByte()))
             out.flush()
-            val resp = ByteArray(256); var total = 0
+            val resp = ByteArray(4); var total = 0
             while (total < 4) total += inp.read(resp, total, 4 - total)
             if (resp[1] != 0x00.toByte()) {
                 NativeLogger.e(TAG, "SOCKS rejected $host:$port rep=${resp[1]}")
                 sock.close(); return null
             }
+            val atyp = resp[3].toInt() and 0xFF
+            val extraLen = when (atyp) {
+                1 -> 4 + 2
+                3 -> { val dlen = inp.read(); if (dlen < 0) throw Exception("SOCKS addr len EOF"); dlen + 2 }
+                4 -> 16 + 2
+                else -> throw Exception("SOCKS unknown atyp=$atyp")
+            }
+            var skipped = 0; while (skipped < extraLen) skipped += inp.read(ByteArray(extraLen - skipped))
             sock
         } catch (e: Exception) {
             NativeLogger.e(TAG, "SOCKS FAIL $host:$port ${e.message}")
