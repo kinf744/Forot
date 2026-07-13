@@ -109,6 +109,7 @@ def init_db():
             transport TEXT DEFAULT 'tcp',
             tls INTEGER DEFAULT 1,
             sni TEXT,
+            host TEXT DEFAULT '',
             public_key TEXT DEFAULT '',
             short_id TEXT DEFAULT '',
             isp TEXT DEFAULT '',
@@ -116,6 +117,9 @@ def init_db():
             flow TEXT DEFAULT '',
             tier TEXT DEFAULT '150',
             xray_uuid TEXT DEFAULT '6e3b3083-f69d-4c98-a6d8-a8134a6d99f6',
+            zivpn_port TEXT DEFAULT '6000-7750,7751-9500,9501-11250,11251-13000,13001-14750,14751-16500,16501-18250,18251-19999',
+            zivpn_password TEXT DEFAULT '',
+            zivpn_obfs TEXT DEFAULT 'hu``hqb`c',
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
         CREATE INDEX IF NOT EXISTS idx_vpn_configs_user_isp_tier ON vpn_configs(user_id, isp, tier);
@@ -230,7 +234,7 @@ class APIHandler(BaseHTTPRequestHandler):
                 return self._send({
                     "success": True,
                     "isp": isp,
-                    "mode": mode,
+                    "mode": cfg["mode"] or "xray",
                     "tier": tier,
                     "address": cfg["server_address"],
                     "port": cfg["server_port"],
@@ -238,11 +242,15 @@ class APIHandler(BaseHTTPRequestHandler):
                     "transport": cfg["transport"] or "xhttp",
                     "tls": bool(cfg["tls"]),
                     "sni": cfg["sni"] or cfg["server_address"],
+                    "host": cfg.get("host") or cfg["sni"] or cfg["server_address"],
                     "flow": cfg["flow"] or "",
                     "public_key": cfg["public_key"] or "",
                     "short_id": cfg["short_id"] or "",
                     "config_id": cfg["id"],
-                    "xray_uuid": cfg["xray_uuid"] or "6e3b3083-f69d-4c98-a6d8-a8134a6d99f6"
+                    "xray_uuid": cfg["xray_uuid"] or "6e3b3083-f69d-4c98-a6d8-a8134a6d99f6",
+                    "zivpn_port": cfg.get("zivpn_port") or "6000-7750,7751-9500,9501-11250,11251-13000,13001-14750,14751-16500,16501-18250,18251-19999",
+                    "zivpn_password": cfg.get("zivpn_password") or "",
+                    "zivpn_obfs": cfg.get("zivpn_obfs") or "hu``hqb`c"
                 })
             return self._send({"success": False, "message": "No config available"}, 404)
 
@@ -272,9 +280,64 @@ class APIHandler(BaseHTTPRequestHandler):
                     "flow": cfg["flow"] or "",
                     "public_key": cfg["public_key"] or "",
                     "short_id": cfg["short_id"] or "",
-                    "xray_uuid": cfg["xray_uuid"] or "6e3b3083-f69d-4c98-a6d8-a8134a6d99f6"
+                    "xray_uuid": cfg["xray_uuid"] or "6e3b3083-f69d-4c98-a6d8-a8134a6d99f6",
+                    "mode": cfg["mode"] or "xray"
                 })
             return self._send({"success": False, "message": "No config assigned"}, 404)
+
+        elif path == "/api/v1/user/configs":
+            uuid = params.get("uuid", [None])[0]
+            code = params.get("code", [""])[0]
+            isp = params.get("isp", [""])[0]
+            if not uuid:
+                return self._send({"success": False, "message": "Missing uuid"}, 400)
+            user = self._get_user_by_uuid(uuid)
+            if not user or not user["active"]:
+                return self._send({"success": False, "message": "User not found or inactive"}, 404)
+            if user["activation_code"] != code:
+                return self._send({"success": False, "message": "Invalid activation code"}, 403)
+            conn = get_db()
+            if isp:
+                rows = conn.execute(
+                    "SELECT * FROM vpn_configs WHERE user_id = ? AND isp = ? ORDER BY tier DESC",
+                    (user["id"], isp)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM vpn_configs WHERE user_id = ? ORDER BY tier DESC", (user["id"],)
+                ).fetchall()
+            conn.close()
+            configs = []
+            for cfg in rows:
+                mode_label = cfg["mode"] or "xray"
+                if mode_label == "zivpn":
+                    label = "Camtel UDP"
+                elif cfg["isp"]:
+                    label = f"{cfg['isp'].upper()} {cfg['tier']}Mo"
+                else:
+                    label = f"{cfg['tier']}Mo"
+                configs.append({
+                    "label": label,
+                    "id": cfg["id"],
+                    "address": cfg["server_address"],
+                    "port": cfg["server_port"],
+                    "protocol": cfg["protocol"],
+                    "transport": cfg["transport"] or "xhttp",
+                    "tls": bool(cfg["tls"]),
+                    "sni": cfg["sni"] or cfg["server_address"],
+                    "host": cfg.get("host") or cfg["sni"] or cfg["server_address"],
+                    "flow": cfg["flow"] or "",
+                    "public_key": cfg["public_key"] or "",
+                    "short_id": cfg["short_id"] or "",
+                    "tier": cfg["tier"],
+                    "isp": cfg["isp"],
+                    "xray_uuid": cfg["xray_uuid"] or "6e3b3083-f69d-4c98-a6d8-a8134a6d99f6",
+                    "mode": mode_label,
+                    "zivpn_port": cfg.get("zivpn_port") or "6000-7750,7751-9500,9501-11250,11251-13000,13001-14750,14751-16500,16501-18250,18251-19999",
+                    "zivpn_password": cfg.get("zivpn_password") or "",
+                    "zivpn_obfs": cfg.get("zivpn_obfs") or "hu``hqb`c"
+                })
+            return self._send({"success": True, "configs": configs})
 
         elif path == "/api/v1/status":
             conn = get_db()
@@ -376,7 +439,8 @@ class APIHandler(BaseHTTPRequestHandler):
                     "flow": cfg["flow"] or "",
                     "public_key": cfg["public_key"] or "",
                     "short_id": cfg["short_id"] or "",
-                    "xray_uuid": cfg["xray_uuid"] or "6e3b3083-f69d-4c98-a6d8-a8134a6d99f6"
+                    "xray_uuid": cfg["xray_uuid"] or "6e3b3083-f69d-4c98-a6d8-a8134a6d99f6",
+                    "mode": cfg["mode"] or "xray"
                 }
 
             return self._send({
@@ -580,6 +644,10 @@ INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transpo
 VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', 'blue', '', '', '100', '$xray_uuid');
 INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, tier, xray_uuid)
 VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port, 'vless', 'xhttp', 1, '$server_addr', 'unknown', '', '', '100', '$xray_uuid');
+
+-- Camtel UDP config (mode zivpn)
+INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, tier, xray_uuid)
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', 443, 'vless', 'udp', 0, '$server_addr', 'camtel', 'zivpn', '', '150', '$xray_uuid');
 EOF
 
     echo

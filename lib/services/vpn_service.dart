@@ -29,9 +29,14 @@ class VpnService {
     String publicKey = '',
     String shortId = '',
     String flow = '',
+    String mode = 'xray',
+    String zivpnPort = '',
+    String zivpnPassword = '',
+    String zivpnObfs = '',
   }) async {
     try {
       final result = await _channel.invokeMethod('connect', {
+        'mode': mode,
         'address': address,
         'port': port,
         'uuid': uuid,
@@ -43,6 +48,9 @@ class VpnService {
         'publicKey': publicKey,
         'shortId': shortId,
         'flow': flow,
+        'zivpnPort': zivpnPort,
+        'zivpnPassword': zivpnPassword,
+        'zivpnObfs': zivpnObfs,
       });
       return result == true;
     } on PlatformException {

@@ -251,14 +251,18 @@ class XrayManager(private val context: Context) {
 
         // PRIORITY 3: Download from GitHub
         return try {
-            NativeLogger.i("XrayManager", "Downloading Xray v25.12.8 from GitHub Releases...")
-            Log.i(TAG, "Downloading Xray from GitHub Releases...")
-            val url = URL("https://github.com/XTLS/Xray-core/releases/download/v25.12.8/Xray-linux-arm32-v7a.zip")
+            // Detect ABI for correct download
+            val abi = if (android.os.Build.SUPPORTED_ABIS.any { it.contains("arm64") }) "arm64-v8a" else "arm32-v7a"
+            val arch = if (android.os.Build.SUPPORTED_ABIS.any { it.contains("arm64") }) "arm64" else "arm32"
+            val xrayUrl = "https://github.com/XTLS/Xray-core/releases/download/v25.12.8/Xray-linux-$arch-v7a.zip"
+            NativeLogger.i("XrayManager", "Downloading Xray v25.12.8 from GitHub Releases (ABI=$abi url=$xrayUrl)...")
+            Log.i(TAG, "Downloading Xray from GitHub Releases ($arch)...")
+            val url = URL(xrayUrl)
             val conn = url.openConnection() as HttpURLConnection
             conn.connectTimeout = 30000
             conn.readTimeout = 300000
             conn.setRequestProperty("User-Agent", "Stivaros/1.0")
-            NativeLogger.i("XrayManager", "Connected to GitHub CDN, reading zip...")
+            NativeLogger.i("XrayManager", "Connected to GitHub CDN, reading zip for $arch...")
             conn.inputStream.use { zipInput ->
                 val zipBytes = zipInput.readBytes()
                 NativeLogger.i("XrayManager", "Downloaded ${zipBytes.size} bytes")

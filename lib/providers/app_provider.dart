@@ -242,6 +242,10 @@ class AppProvider extends ChangeNotifier {
       publicKey: c.publicKey ?? '',
       shortId: c.shortId ?? '',
       flow: c.flow ?? '',
+      mode: c.mode,
+      zivpnPort: c.zivpnPort,
+      zivpnPassword: c.zivpnPassword.isNotEmpty ? c.zivpnPassword : (c.xrayUuid ?? _user!.uuid),
+      zivpnObfs: c.zivpnObfs,
     );
     if (connected) {
       FileLogger().i('AppProvider', 'Quota handler: connected');
@@ -327,6 +331,66 @@ class AppProvider extends ChangeNotifier {
   Future<bool> loadConfigs() async {
     if (_user == null) return false;
 
+    final serverAddress = _user!.serverAddress.isNotEmpty
+        ? _user!.serverAddress
+        : (_serverConfig?.address ?? '');
+    final uuid = _user!.uuid;
+
+    // Build default local configs (MTN 150Mo, MTN 100Mo, Camtel UDP)
+    final defaultConfigs = <Map<String, dynamic>>[
+      {
+        'label': 'MTN 150Mo',
+        'address': serverAddress,
+        'port': 443,
+        'protocol': 'vless',
+        'transport': 'xhttp',
+        'tls': true,
+        'sni': 'mtnplay.com',
+        'host': 'mtnplay.com',
+        'public_key': '',
+        'short_id': '',
+        'flow': '',
+        'tier': '150',
+        'mode': 'xray',
+        'xray_uuid': uuid,
+      },
+      {
+        'label': 'MTN 100Mo',
+        'address': serverAddress,
+        'port': 443,
+        'protocol': 'vless',
+        'transport': 'xhttp',
+        'tls': true,
+        'sni': 'mtnplay.com',
+        'host': 'mtnplay.com',
+        'public_key': '',
+        'short_id': '',
+        'flow': '',
+        'tier': '100',
+        'mode': 'xray',
+        'xray_uuid': uuid,
+      },
+      {
+        'label': 'Camtel UDP',
+        'address': serverAddress,
+        'port': 443,
+        'protocol': 'vless',
+        'transport': 'xhttp',
+        'tls': true,
+        'sni': serverAddress,
+        'host': serverAddress,
+        'public_key': '',
+        'short_id': '',
+        'flow': '',
+        'tier': '150',
+        'mode': 'zivpn',
+        'xray_uuid': uuid,
+        'zivpn_port': '6000-7750,7751-9500,9501-11250,11251-13000,13001-14750,14751-16500,16501-18250,18251-19999',
+        'zivpn_password': uuid,
+        'zivpn_obfs': 'hu``hqb`c',
+      },
+    ];
+
     // Try to load from cache first
     final cached = await StorageService.getConfigsList();
     if (cached.isNotEmpty) {
@@ -352,19 +416,34 @@ class AppProvider extends ChangeNotifier {
       isp: 'mtn',
     );
     if (result['success'] == true && result['configs'] is List) {
-      _configs = (result['configs'] as List).cast<Map<String, dynamic>>();
+      final apiConfigs = (result['configs'] as List).cast<Map<String, dynamic>>();
+      if (apiConfigs.isNotEmpty) {
+        _configs = apiConfigs;
+        await StorageService.saveConfigsList(jsonEncode(_configs));
+        if (_configs.isNotEmpty && _selectedConfigIndex == null) {
+          _selectedConfigIndex = 0;
+          _applyConfig(_configs[0]);
+          await StorageService.saveSelectedConfigIndex(0);
+        } else if (_configs.isNotEmpty && _selectedConfigIndex != null) {
+          // Re-apply using cached index
+        }
+        notifyListeners();
+        return true;
+      }
+    }
+
+    // API failed or empty — use default configs
+    if (_configs.isEmpty) {
+      _configs = defaultConfigs;
       await StorageService.saveConfigsList(jsonEncode(_configs));
-      if (_configs.isNotEmpty && _selectedConfigIndex == null) {
+      if (_selectedConfigIndex == null) {
         _selectedConfigIndex = 0;
         _applyConfig(_configs[0]);
         await StorageService.saveSelectedConfigIndex(0);
-      } else if (_configs.isNotEmpty && _selectedConfigIndex != null) {
-        // Re-apply using cached index
       }
       notifyListeners();
-      return true;
+      FileLogger().i('AppProvider', 'Using 3 default configs (MTN 150, MTN 100, Camtel UDP)');
     }
-    FileLogger().w('AppProvider', 'loadConfigs API failed, using cached configs: ${_configs.length} configs');
     return _configs.isNotEmpty;
   }
 
@@ -434,7 +513,7 @@ class AppProvider extends ChangeNotifier {
     _connectionState = VpnState.connecting;
     notifyListeners();
 
-    FileLogger().i('AppProvider', 'connect: address=${config.address} port=${config.port} uuid=${config.xrayUuid ?? _user!.uuid} transport=${config.transport} sni=${config.sni} host=${config.host}');
+    FileLogger().i('AppProvider', 'connect: mode=${config.mode} address=${config.address} port=${config.port} uuid=${config.xrayUuid ?? _user!.uuid} transport=${config.transport}');
     final success = await VpnService.connect(
       address: config.address,
       port: config.port,
@@ -447,6 +526,10 @@ class AppProvider extends ChangeNotifier {
       publicKey: config.publicKey ?? '',
       shortId: config.shortId ?? '',
       flow: config.flow ?? '',
+      mode: config.mode,
+      zivpnPort: config.zivpnPort,
+      zivpnPassword: config.zivpnPassword.isNotEmpty ? config.zivpnPassword : (config.xrayUuid ?? _user!.uuid),
+      zivpnObfs: config.zivpnObfs,
     );
 
     if (success) {

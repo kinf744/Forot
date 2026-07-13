@@ -11,6 +11,10 @@ class ServerConfig {
   final String? flow;
   final int? configId;
   final String? xrayUuid;
+  final String mode;
+  final String zivpnPort;
+  final String zivpnPassword;
+  final String zivpnObfs;
 
   ServerConfig({
     required this.address,
@@ -25,6 +29,10 @@ class ServerConfig {
     this.flow,
     this.configId,
     this.xrayUuid,
+    this.mode = 'xray',
+    this.zivpnPort = '6000-7750,7751-9500,9501-11250,11251-13000,13001-14750,14751-16500,16501-18250,18251-19999',
+    this.zivpnPassword = '',
+    this.zivpnObfs = 'hu``hqb`c',
   })  : sni = (sni == null || sni.isEmpty) ? address : sni,
         host = (host == null || host.isEmpty) ? (sni == null || sni.isEmpty ? address : sni) : host;
 
@@ -42,6 +50,10 @@ class ServerConfig {
       flow: json['flow'],
       configId: json['config_id'],
       xrayUuid: json['xray_uuid'],
+      mode: json['mode'] ?? 'xray',
+      zivpnPort: json['zivpn_port'] ?? '6000-7750,7751-9500,9501-11250,11251-13000,13001-14750,14751-16500,16501-18250,18251-19999',
+      zivpnPassword: json['zivpn_password'] ?? '',
+      zivpnObfs: json['zivpn_obfs'] ?? 'hu``hqb`c',
     );
   }
 
@@ -58,5 +70,9 @@ class ServerConfig {
     'flow': flow,
     'config_id': configId,
     'xray_uuid': xrayUuid,
+    'mode': mode,
+    'zivpn_port': zivpnPort,
+    'zivpn_password': zivpnPassword,
+    'zivpn_obfs': zivpnObfs,
   };
 }

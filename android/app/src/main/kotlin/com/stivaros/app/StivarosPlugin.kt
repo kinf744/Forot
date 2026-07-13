@@ -157,6 +157,7 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         NativeLogger.i("Plugin", "Starting StivarosVpnService with params")
         val serviceIntent = Intent(context, StivarosVpnService::class.java).apply {
             action = StivarosVpnService.ACTION_START
+            putExtra("mode", params["mode"] as? String ?: "xray")
             putExtra("address", params["address"] as? String ?: "")
             putExtra("port", (params["port"] as? Int) ?: 443)
             putExtra("uuid", params["uuid"] as? String ?: "")
@@ -168,6 +169,9 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             putExtra("publicKey", params["publicKey"] as? String ?: "")
             putExtra("shortId", params["shortId"] as? String ?: "")
             putExtra("flow", params["flow"] as? String ?: "")
+            putExtra("zivpnPort", params["zivpnPort"] as? String ?: "")
+            putExtra("zivpnPassword", params["zivpnPassword"] as? String ?: "")
+            putExtra("zivpnObfs", params["zivpnObfs"] as? String ?: "")
         }
         context.startForegroundService(serviceIntent)
     }
@@ -176,6 +180,7 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         when (call.method) {
             "connect" -> {
                 val params = mutableMapOf<String, Any?>()
+                params["mode"] = call.argument<String>("mode") ?: "xray"
                 params["address"] = call.argument<String>("address") ?: ""
                 params["port"] = call.argument<Int>("port") ?: 443
                 params["uuid"] = call.argument<String>("uuid") ?: ""
@@ -187,8 +192,11 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 params["publicKey"] = call.argument<String>("publicKey") ?: ""
                 params["shortId"] = call.argument<String>("shortId") ?: ""
                 params["flow"] = call.argument<String>("flow") ?: ""
+                params["zivpnPort"] = call.argument<String>("zivpnPort") ?: ""
+                params["zivpnPassword"] = call.argument<String>("zivpnPassword") ?: ""
+                params["zivpnObfs"] = call.argument<String>("zivpnObfs") ?: ""
 
-                NativeLogger.i("Plugin", "connect called: address=${params["address"]} port=${params["port"]} uuid=${params["uuid"]}")
+                NativeLogger.i("Plugin", "connect called: mode=${params["mode"]} address=${params["address"]} uuid=${params["uuid"]}")
 
                 // Check VPN permission
                 val vpnIntent = android.net.VpnService.prepare(context)
