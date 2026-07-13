@@ -385,7 +385,7 @@ class AppProvider extends ChangeNotifier {
         'tier': '150',
         'mode': 'zivpn',
         'xray_uuid': uuid,
-        'zivpn_port': '5667',
+        'zivpn_port': '6000-7750,7751-9500,9501-11250,11251-13000,13001-14750,14751-16500,16501-18250,18251-19999',
         'zivpn_password': uuid,
         'zivpn_obfs': 'hu``hqb`c',
       },
