@@ -189,8 +189,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Text(c['label'] as String? ?? 'Config ${i + 1}'),
                           );
                         }),
-                        onChanged: (index) {
-                          if (index != null) provider.selectConfig(index);
+                        onChanged: (index) async {
+                          if (index != null) await provider.selectConfig(index);
                         },
                       ),
                     ),

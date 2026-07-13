@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import '../models/user.dart';
@@ -294,6 +295,26 @@ class AppProvider extends ChangeNotifier {
 
   Future<bool> loadConfigs() async {
     if (_user == null) return false;
+
+    // Try to load from cache first
+    final cached = await StorageService.getConfigsList();
+    if (cached.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(cached) as List;
+        _configs = decoded.cast<Map<String, dynamic>>();
+        final savedIndex = await StorageService.getSelectedConfigIndex();
+        if (savedIndex != null && savedIndex < _configs.length) {
+          _selectedConfigIndex = savedIndex;
+          _applyConfig(_configs[savedIndex]);
+        } else if (_configs.isNotEmpty && _selectedConfigIndex == null) {
+          _selectedConfigIndex = 0;
+          _applyConfig(_configs[0]);
+        }
+        notifyListeners();
+      } catch (_) {}
+    }
+
+    // Refresh from API
     final result = await ApiService.getUserConfigs(
       uuid: _user!.uuid,
       activationCode: _user!.activationCode,
@@ -301,21 +322,26 @@ class AppProvider extends ChangeNotifier {
     );
     if (result['success'] == true && result['configs'] is List) {
       _configs = (result['configs'] as List).cast<Map<String, dynamic>>();
+      await StorageService.saveConfigsList(jsonEncode(_configs));
       if (_configs.isNotEmpty && _selectedConfigIndex == null) {
         _selectedConfigIndex = 0;
         _applyConfig(_configs[0]);
+        await StorageService.saveSelectedConfigIndex(0);
+      } else if (_configs.isNotEmpty && _selectedConfigIndex != null) {
+        // Re-apply using cached index
       }
       notifyListeners();
       return true;
     }
-    FileLogger().e('AppProvider', 'loadConfigs failed: ${result['message']}');
-    return false;
+    FileLogger().w('AppProvider', 'loadConfigs API failed, using cached configs: ${_configs.length} configs');
+    return _configs.isNotEmpty;
   }
 
-  void selectConfig(int index) {
+  Future<void> selectConfig(int index) async {
     if (index < 0 || index >= _configs.length) return;
     _selectedConfigIndex = index;
     _applyConfig(_configs[index]);
+    await StorageService.saveSelectedConfigIndex(index);
   }
 
   void _applyConfig(Map<String, dynamic> cfg) {

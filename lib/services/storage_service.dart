@@ -57,6 +57,29 @@ class StorageService {
     await prefs.setString(key, value);
   }
 
+  static const _keyConfigs = 'configs_list';
+  static const _keySelectedIndex = 'selected_config_index';
+
+  static Future<void> saveConfigsList(String jsonData) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyConfigs, jsonData);
+  }
+
+  static Future<String> getConfigsList() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyConfigs) ?? '';
+  }
+
+  static Future<void> saveSelectedConfigIndex(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_keySelectedIndex, index);
+  }
+
+  static Future<int?> getSelectedConfigIndex() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_keySelectedIndex);
+  }
+
   static Future<void> clearAll() async {
     await _secure.deleteAll();
     final prefs = await SharedPreferences.getInstance();
