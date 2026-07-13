@@ -168,7 +168,7 @@ class XrayManager(private val context: Context) {
                 sb.appendLine("""        "scMaxConcurrentPosts": 16,""")
                 sb.appendLine("""        "scMinPostsIntervalMs": 10,""")
                 sb.appendLine("""        "scMaxEachPostBytes": 1000000,""")
-                sb.appendLine("""        "noSSEHeader": true,""")
+                sb.appendLine("""        "noSSEHeader": false,""")
                 sb.appendLine("""        "xPaddingBytes": "100-1000"""")
                 sb.appendLine("""      },""")
             }
