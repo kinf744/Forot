@@ -163,12 +163,12 @@ class XrayManager(private val context: Context) {
             "xhttp" -> {
                 sb.appendLine("""      "xhttpSettings": {""")
                 sb.appendLine("""        "path": "/vless-xhttp",""")
-                sb.appendLine("""        "mode": "auto",""")
+                sb.appendLine("""        "mode": "stream-up",""")
                 sb.appendLine("""        "host": "$host",""")
                 sb.appendLine("""        "scMaxConcurrentPosts": 16,""")
                 sb.appendLine("""        "scMinPostsIntervalMs": 10,""")
                 sb.appendLine("""        "scMaxEachPostBytes": 1000000,""")
-                sb.appendLine("""        "noSSEHeader": false,""")
+                sb.appendLine("""        "noSSEHeader": true,""")
                 sb.appendLine("""        "xPaddingBytes": "100-1000"""")
                 sb.appendLine("""      },""")
             }
