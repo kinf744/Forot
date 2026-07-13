@@ -40,14 +40,20 @@ class Tun2SocksRelay(
         while (isActive) {
             try {
                 val len = inp.read(buf)
-                if (len < 0) break
+                if (len < 0) {
+                    NativeLogger.w(TAG, "readLoop: TUN fd EOF, waiting...")
+                    delay(100)
+                    continue
+                }
                 if (len < 20) continue
                 packetCount++
                 if (packetCount <= 5 || packetCount % 100 == 0)
                     NativeLogger.i(TAG, "readLoop: packet #$packetCount len=$len")
                 handlePacket(buf.copyOf(len))
-            } catch (_: java.io.InterruptedIOException) { break }
-            catch (e: Exception) {
+            } catch (e: java.io.InterruptedIOException) {
+                if (!isActive) break
+                NativeLogger.w(TAG, "readLoop: interrupted (${e.message}), continuing...")
+            } catch (e: Exception) {
                 if (isActive) {
                     NativeLogger.e(TAG, "readLoop: packet #$packetCount error: ${e.message}")
                 }
@@ -111,15 +117,18 @@ class Tun2SocksRelay(
 
     private suspend fun handleUdp(pkt: ByteArray, ihl: Int) {
         if (pkt.size < ihl + 8) return
+        val srcPort = port(pkt, ihl)
         val dstPort = port(pkt, ihl + 2)
         val dataOff = ihl + 8
         if (dataOff >= pkt.size) return
         val data = pkt.copyOfRange(dataOff, pkt.size)
         if (dstPort != 53) return
+        val srcIp = ipStr(pkt, 12)
+        val dstIp = ipStr(pkt, 16)
 
         scope.launch(Dispatchers.IO) {
             try {
-                val sock = socks5Connect("129.0.183.251", 53) ?: return@launch
+                val sock = socks5Connect(dstIp, dstPort) ?: return@launch
                 val out = sock.getOutputStream()
                 out.write(byteArrayOf((data.size shr 8).toByte(), (data.size and 0xFF).toByte()))
                 out.write(data)
@@ -131,7 +140,7 @@ class Tun2SocksRelay(
                 val resp = ByteArray(len)
                 r = 0; while (r < len) r += inp.read(resp, r, len - r)
                 sock.close()
-                Log.i(TAG, "DNS response ${resp.size} bytes")
+                writeUdpResponse(srcIp, dstIp, srcPort, dstPort, resp)
             } catch (e: Exception) {
                 Log.e(TAG, "DNS: ${e.message}")
             }
@@ -175,6 +184,44 @@ class Tun2SocksRelay(
         }
     }
 
+    private fun writeUdpResponse(clientIp: String, serverIp: String, clientPort: Int, serverPort: Int, data: ByteArray) {
+        try {
+            val total = 20 + 8 + data.size
+            val ipHeader = ByteArray(20)
+            ipHeader[0] = 0x45.toByte()
+            ipHeader[1] = 0
+            ipHeader[2] = (total shr 8).toByte()
+            ipHeader[3] = (total and 0xFF).toByte()
+            ipHeader[8] = 64
+            ipHeader[9] = 17
+            val srcParts = serverIp.split(".").map { it.toInt() }
+            val dstParts = clientIp.split(".").map { it.toInt() }
+            for (i in 0..3) {
+                ipHeader[12 + i] = srcParts[i].toByte()
+                ipHeader[16 + i] = dstParts[i].toByte()
+            }
+            ipHeader[10] = 0; ipHeader[11] = 0
+            val ipCsum = checksum(ipHeader)
+            ipHeader[10] = (ipCsum shr 8).toByte()
+            ipHeader[11] = (ipCsum and 0xFF).toByte()
+
+            val udpLen = 8 + data.size
+            val udpHeader = ByteArray(8)
+            udpHeader[0] = (serverPort shr 8).toByte()
+            udpHeader[1] = (serverPort and 0xFF).toByte()
+            udpHeader[2] = (clientPort shr 8).toByte()
+            udpHeader[3] = (clientPort and 0xFF).toByte()
+            udpHeader[4] = (udpLen shr 8).toByte()
+            udpHeader[5] = (udpLen and 0xFF).toByte()
+            udpHeader[6] = 0; udpHeader[7] = 0
+
+            val pkt = ipHeader + udpHeader + data
+            synchronized(tunOut) { tunOut.write(pkt) }
+        } catch (e: Exception) {
+            Log.e(TAG, "writeUdpResponse: ${e.message}")
+        }
+    }
+
     private fun socks5Connect(host: String, port: Int): Socket? {
         NativeLogger.i(TAG, "socks5Connect: connecting to $socksHost:$socksPort for $host:$port")
         return try {
@@ -186,7 +233,7 @@ class Tun2SocksRelay(
             val inp = sock.getInputStream()
             out.write(byteArrayOf(0x05, 0x01, 0x00)); out.flush()
             val greetingResp = ByteArray(2)
-            inp.read(greetingResp); inp.read(greetingResp)
+            var gr = 0; while (gr < 2) gr += inp.read(greetingResp, gr, 2 - gr)
             NativeLogger.i(TAG, "socks5Connect: greeting resp=${greetingResp[0]},${greetingResp[1]}")
             val hostBytes = host.toByteArray()
             out.write(byteArrayOf(0x05, 0x01, 0x00, 0x03, hostBytes.size.toByte()) +
