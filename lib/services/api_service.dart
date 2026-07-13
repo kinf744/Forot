@@ -136,11 +136,14 @@ class ApiService {
   static Future<Map<String, dynamic>> getUserConfigs({
     required String uuid,
     required String activationCode,
+    String? isp,
   }) async {
     try {
+      var url = '$baseUrl/api/v1/user/configs?uuid=$uuid&code=$activationCode';
+      if (isp != null && isp.isNotEmpty) url += '&isp=$isp';
       final response = await http
           .get(
-            Uri.parse('$baseUrl/api/v1/user/configs?uuid=$uuid&code=$activationCode'),
+            Uri.parse(url),
             headers: {'Content-Type': 'application/json'},
           )
           .timeout(timeout);

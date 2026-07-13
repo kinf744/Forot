@@ -297,6 +297,7 @@ class AppProvider extends ChangeNotifier {
     final result = await ApiService.getUserConfigs(
       uuid: _user!.uuid,
       activationCode: _user!.activationCode,
+      isp: 'mtn',
     );
     if (result['success'] == true && result['configs'] is List) {
       _configs = (result['configs'] as List).cast<Map<String, dynamic>>();
