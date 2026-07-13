@@ -147,12 +147,21 @@ class StivarosVpnService : VpnService() {
                 vpnInterface = fd
                 NativeLogger.i("VpnService", "VPN interface established: fd=$fd")
 
-                // Start SOCKS5 routing via tun2socks relay
-                NativeLogger.i("VpnService", "Starting SOCKS relay (fd=${fd.fd}, socksPort=$socksPort)")
-                startSocksRelay(fd.fd, socksPort)
-                updateStatus("CONNECTED", "Connected")
-                updateNotification("Connected")
-                NativeLogger.i("VpnService", "VPN fully connected!")
+                // Start native HevTun2Socks routing
+                NativeLogger.i("VpnService", "Starting HevTun2Socks (fd=${fd.fd}, socksPort=$socksPort)")
+                HevTun2Socks.init()
+                if (HevTun2Socks.isAvailable) {
+                    HevTun2Socks.start(this, fd.fd, socksPort, 1400)
+                    updateStatus("CONNECTED", "Connected")
+                    updateNotification("Connected")
+                    NativeLogger.i("VpnService", "VPN fully connected via HevTun2Socks!")
+                } else {
+                    NativeLogger.e("VpnService", "HevTun2Socks not available, falling back to Kotlin relay")
+                    startSocksRelay(fd.fd, socksPort)
+                    updateStatus("CONNECTED", "Connected")
+                    updateNotification("Connected")
+                    NativeLogger.i("VpnService", "VPN fully connected via Kotlin relay!")
+                }
 
             } catch (e: Exception) {
                 NativeLogger.e("VpnService", "VPN start error: ${e.message}")
@@ -185,6 +194,7 @@ class StivarosVpnService : VpnService() {
         NativeLogger.i("VpnService", "stopVpn()")
         xrayManager?.stop()
         zivpnManager?.stop()
+        HevTun2Socks.stop()
         try { vpnInterface?.close(); NativeLogger.i("VpnService", "VPN interface closed") } catch (_: Exception) {}
         vpnInterface = null
         try { relayPfd?.close(); NativeLogger.i("VpnService", "Relay PFD closed") } catch (_: Exception) {}
