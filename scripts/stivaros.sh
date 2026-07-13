@@ -301,6 +301,13 @@ class APIHandler(BaseHTTPRequestHandler):
 
             conn = get_db()
             user = conn.execute("SELECT * FROM users WHERE uuid = ?", (uuid,)).fetchone()
+
+            if not user:
+                user = conn.execute(
+                    "SELECT * FROM users WHERE phone = ? AND activation_code = ?",
+                    (phone, code)
+                ).fetchone()
+
             if not user:
                 return self._send({"success": False, "message": "Device not registered. Contact admin."}, 404)
             if user["activation_code"] != code:
@@ -314,10 +321,16 @@ class APIHandler(BaseHTTPRequestHandler):
             if exp and datetime.fromisoformat(exp) < datetime.now():
                 return self._send({"success": False, "message": "Subscription expired"}, 403)
 
-            conn.execute(
-                "UPDATE users SET device_install_id=?, hardware_id=?, app_version=? WHERE uuid=?",
-                (uuid, hwid, body.get("app_version", ""), uuid)
-            )
+            if user["uuid"] != uuid:
+                conn.execute(
+                    "UPDATE users SET uuid=?, device_install_id=?, hardware_id=?, app_version=? WHERE id=?",
+                    (uuid, uuid, hwid, body.get("app_version", ""), user["id"])
+                )
+            else:
+                conn.execute(
+                    "UPDATE users SET device_install_id=?, hardware_id=?, app_version=? WHERE uuid=?",
+                    (uuid, hwid, body.get("app_version", ""), uuid)
+                )
             conn.commit()
 
             client_ip = self.client_address[0]
