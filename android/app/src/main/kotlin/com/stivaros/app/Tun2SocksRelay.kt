@@ -8,6 +8,7 @@ import java.io.FileOutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
+import android.os.ParcelFileDescriptor
 
 class Tun2SocksRelay(
     private val tunFd: FileDescriptor,
@@ -41,9 +42,8 @@ class Tun2SocksRelay(
             try {
                 val len = inp.read(buf)
                 if (len < 0) {
-                    NativeLogger.w(TAG, "readLoop: TUN fd EOF, waiting...")
-                    delay(100)
-                    continue
+                    NativeLogger.w(TAG, "readLoop: TUN fd EOF")
+                    break
                 }
                 if (len < 20) continue
                 packetCount++
@@ -52,7 +52,10 @@ class Tun2SocksRelay(
                 handlePacket(buf.copyOf(len))
             } catch (e: java.io.InterruptedIOException) {
                 if (!isActive) break
-                NativeLogger.w(TAG, "readLoop: interrupted (${e.message}), continuing...")
+                NativeLogger.w(TAG, "readLoop: interrupted, continuing...")
+            } catch (e: java.io.IOException) {
+                NativeLogger.e(TAG, "readLoop: IO error #$packetCount: ${e.message}")
+                if (e.message?.contains("EBADF") == true || e.message?.contains("Bad file descriptor") == true) break
             } catch (e: Exception) {
                 if (isActive) {
                     NativeLogger.e(TAG, "readLoop: packet #$packetCount error: ${e.message}")

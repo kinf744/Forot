@@ -32,6 +32,7 @@ class StivarosVpnService : VpnService() {
     }
 
     private var vpnInterface: ParcelFileDescriptor? = null
+    private var relayPfd: ParcelFileDescriptor? = null
     private var serviceJob = SupervisorJob()
     private var serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
     private var xrayManager: XrayManager? = null
@@ -148,8 +149,9 @@ class StivarosVpnService : VpnService() {
         serviceScope.launch(Dispatchers.IO) {
             try {
                 NativeLogger.i("VpnService", "startSocksRelay: fd=$fd socksPort=$socksPort")
+                relayPfd = ParcelFileDescriptor.fromFd(fd)
                 val relay = Tun2SocksRelay(
-                    ParcelFileDescriptor.fromFd(fd).fileDescriptor,
+                    relayPfd!!.fileDescriptor,
                     "127.0.0.1", socksPort
                 )
                 relay.start()
@@ -166,6 +168,8 @@ class StivarosVpnService : VpnService() {
         xrayManager?.stop()
         try { vpnInterface?.close(); NativeLogger.i("VpnService", "VPN interface closed") } catch (_: Exception) {}
         vpnInterface = null
+        try { relayPfd?.close(); NativeLogger.i("VpnService", "Relay PFD closed") } catch (_: Exception) {}
+        relayPfd = null
         try { stopForeground(STOP_FOREGROUND_REMOVE) } catch (_: Exception) {}
         updateStatus("DISCONNECTED", "Disconnected")
     }
