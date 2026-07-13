@@ -1,6 +1,5 @@
 package com.stivaros.app
 
-import android.util.Log
 import kotlinx.coroutines.*
 import java.io.FileDescriptor
 import java.io.FileInputStream
@@ -8,7 +7,7 @@ import java.io.FileOutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
-import android.os.ParcelFileDescriptor
+import kotlin.random.Random
 
 class Tun2SocksRelay(
     private val tunFd: FileDescriptor,
@@ -20,11 +19,11 @@ class Tun2SocksRelay(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val sessions = ConcurrentHashMap<String, Session>()
     private val tunOut = FileOutputStream(tunFd)
+    private var isnCounter = Random.nextInt(100000, 999999999)
 
     fun start() {
         NativeLogger.i(TAG, "start() launched readLoop coroutine")
         scope.launch { readLoop() }
-        Log.i(TAG, "Relay started -> SOCKS5 $socksHost:$socksPort")
     }
 
     fun stop() {
@@ -52,23 +51,20 @@ class Tun2SocksRelay(
                 handlePacket(buf.copyOf(len))
             } catch (e: java.io.InterruptedIOException) {
                 if (!isActive) break
-                NativeLogger.w(TAG, "readLoop: interrupted, continuing...")
             } catch (e: java.io.IOException) {
-                NativeLogger.e(TAG, "readLoop: IO error #$packetCount: ${e.message}")
                 if (e.message?.contains("EBADF") == true || e.message?.contains("Bad file descriptor") == true) break
             } catch (e: Exception) {
-                if (isActive) {
-                    NativeLogger.e(TAG, "readLoop: packet #$packetCount error: ${e.message}")
-                }
+                if (isActive) NativeLogger.e(TAG, "readLoop: packet #$packetCount error: ${e.message}")
             }
         }
         NativeLogger.i(TAG, "readLoop: terminated after $packetCount packets")
     }
 
-    private suspend fun handlePacket(pkt: ByteArray) {
+    private fun handlePacket(pkt: ByteArray) {
         val ver = (pkt[0].toInt() and 0xFF) shr 4
         if (ver != 4) return
         val ihl = (pkt[0].toInt() and 0x0F) * 4
+        if (pkt.size < ihl) return
         val proto = pkt[9].toInt() and 0xFF
         when (proto) {
             6 -> handleTcp(pkt, ihl)
@@ -76,56 +72,252 @@ class Tun2SocksRelay(
         }
     }
 
-    private suspend fun handleTcp(pkt: ByteArray, ihl: Int) {
+    private fun handleTcp(pkt: ByteArray, ihl: Int) {
         if (pkt.size < ihl + 20) return
         val srcPort = port(pkt, ihl)
         val dstPort = port(pkt, ihl + 2)
+        val seqNum = bytesToUInt(pkt, ihl + 4)
+        val ackNum = bytesToUInt(pkt, ihl + 8)
         val flags = pkt[ihl + 13].toInt() and 0xFF
         val syn = flags and 0x02 != 0
         val fin = flags and 0x01 != 0
         val rst = flags and 0x04 != 0
+        val ack = flags and 0x10 != 0
         val dataOff = ihl + ((pkt[ihl + 12].toInt() and 0xF0) shr 4) * 4
         val srcIp = ipStr(pkt, 12)
         val dstIp = ipStr(pkt, 16)
         val key = "$srcIp:$srcPort-$dstIp:$dstPort"
 
+        if (rst) {
+            sessions.remove(key)?.close()
+            return
+        }
+
         if (syn && !sessions.containsKey(key)) {
-            NativeLogger.i(TAG, "$srcIp -> $dstIp:$dstPort [${sessions.size}]")
-            val session = Session(key, srcIp, srcPort, dstIp, dstPort)
+            val session = Session(key, srcIp, srcPort, dstIp, dstPort, seqNum, nextIsn())
             sessions[key] = session
             scope.launch {
                 try {
-                    session.connect(socksHost, socksPort)
-                    session.startReading { data ->
-                        writeIpPacket(dstIp, srcIp, dstPort, srcPort, data)
+                    val sock = socks5Connect(dstIp, dstPort)
+                    if (sock != null) {
+                        session.socket = sock
+                        session.state = Session.State.ESTABLISHED
+                        sendSynAck(session)
+                        session.startReading { data ->
+                            sendTcpData(session, data)
+                        }
+                    } else {
+                        sendRst(session)
+                        sessions.remove(key)
                     }
                 } catch (e: Exception) {
-                    NativeLogger.e(TAG, "Session coroutine: ${e.message}")
+                    NativeLogger.e(TAG, "Session $key error: ${e.message}")
                     sessions.remove(key)
-                    session.close()
                 }
             }
+            return
         }
 
-        if (fin || rst) {
-            sessions.remove(key)?.close()
+        val session = sessions[key] ?: return
+
+        if (session.state == Session.State.CLOSED) {
+            sessions.remove(key)
+            return
+        }
+
+        if (ack) {
+            session.clientAck = ackNum
+        }
+
+        if (fin) {
+            session.state = Session.State.CLOSING
+            session.socket?.let { sock ->
+                try { sock.shutdownOutput() } catch (_: Exception) {}
+            }
+            sendFinAck(session)
             return
         }
 
         if (dataOff < pkt.size) {
             val data = pkt.copyOfRange(dataOff, pkt.size)
-            if (data.isNotEmpty()) sessions[key]?.write(data)
+            if (data.isNotEmpty()) {
+                session.clientSeq = (session.clientSeq + data.size) and 0xFFFFFFFFL
+                session.socket?.let { sock ->
+                    try {
+                        sock.getOutputStream().write(data)
+                        sock.getOutputStream().flush()
+                    } catch (e: Exception) {
+                        NativeLogger.e(TAG, "Write error $key: ${e.message}")
+                        sessions.remove(key)
+                        session.close()
+                    }
+                }
+                sendAck(session)
+            }
         }
     }
 
-    private suspend fun handleUdp(pkt: ByteArray, ihl: Int) {
+    private fun nextIsn(): Long {
+        isnCounter = (isnCounter + Random.nextInt(1000, 9999)).toInt()
+        return (isnCounter.toLong() and 0xFFFFFFFFL)
+    }
+
+    private fun sendSynAck(session: Session) {
+        val pkt = buildTcpPacket(
+            session.dstIp, session.srcIp,
+            session.dstPort, session.srcPort,
+            session.serverSeq, (session.clientSeq + 1) and 0xFFFFFFFFL,
+            0x12.toByte(), byteArrayOf()
+        )
+        writeToTun(pkt)
+        session.serverSeq = (session.serverSeq + 1) and 0xFFFFFFFFL
+        session.serverAck = (session.clientSeq + 1) and 0xFFFFFFFFL
+        NativeLogger.i(TAG, "SYN-ACK sent to ${session.srcIp}:${session.srcPort}")
+    }
+
+    private fun sendAck(session: Session) {
+        val pkt = buildTcpPacket(
+            session.dstIp, session.srcIp,
+            session.dstPort, session.srcPort,
+            session.serverSeq, session.clientSeq,
+            0x10.toByte(), byteArrayOf()
+        )
+        writeToTun(pkt)
+        NativeLogger.i(TAG, "ACK sent to ${session.srcIp}:${session.srcPort} ack=${session.clientSeq}")
+    }
+
+    private fun sendFinAck(session: Session) {
+        session.serverSeq = (session.serverSeq + 1) and 0xFFFFFFFFL
+        val finSeq = session.serverSeq
+        val pkt = buildTcpPacket(
+            session.dstIp, session.srcIp,
+            session.dstPort, session.srcPort,
+            finSeq, session.clientSeq,
+            0x11.toByte(), byteArrayOf()
+        )
+        writeToTun(pkt)
+        session.state = Session.State.LAST_ACK
+        NativeLogger.i(TAG, "FIN-ACK sent to ${session.srcIp}:${session.srcPort}")
+    }
+
+    private fun sendRst(session: Session) {
+        val pkt = buildTcpPacket(
+            session.dstIp, session.srcIp,
+            session.dstPort, session.srcPort,
+            0, 0,
+            0x04.toByte(), byteArrayOf()
+        )
+        writeToTun(pkt)
+        NativeLogger.w(TAG, "RST sent to ${session.srcIp}:${session.srcPort}")
+    }
+
+    fun sendTcpData(session: Session, data: ByteArray) {
+        if (session.state == Session.State.CLOSED || session.state == Session.State.CLOSING) return
+        session.serverSeq = (session.serverSeq + data.size) and 0xFFFFFFFFL
+        val pkt = buildTcpPacket(
+            session.dstIp, session.srcIp,
+            session.dstPort, session.srcPort,
+            session.serverSeq, session.clientSeq,
+            0x18.toByte(), data
+        )
+        writeToTun(pkt)
+        NativeLogger.i(TAG, "Data sent to ${session.srcIp}:${session.srcPort} ${data.size}b seq=${session.serverSeq}")
+    }
+
+    private fun buildTcpPacket(
+        srcIp: String, dstIp: String,
+        srcPort: Int, dstPort: Int,
+        seqNum: Long, ackNum: Long,
+        flags: Byte, data: ByteArray
+    ): ByteArray {
+        val tcpLen = 20
+        val totalLen = 20 + tcpLen + data.size
+
+        val ip = ByteArray(20)
+        ip[0] = 0x45.toByte()
+        ip[1] = 0
+        ip[2] = (totalLen shr 8).toByte()
+        ip[3] = (totalLen and 0xFF).toByte()
+        ip[4] = 0; ip[5] = 0
+        ip[6] = 0; ip[7] = 0
+        ip[8] = 64
+        ip[9] = 6
+        ip[10] = 0; ip[11] = 0
+        val sip = srcIp.split(".").map { it.toInt() and 0xFF }
+        val dip = dstIp.split(".").map { it.toInt() and 0xFF }
+        for (i in 0..3) {
+            ip[12 + i] = sip[i].toByte()
+            ip[16 + i] = dip[i].toByte()
+        }
+        val ipCsum = checksum(ip)
+        ip[10] = (ipCsum shr 8).toByte()
+        ip[11] = (ipCsum and 0xFF).toByte()
+
+        val tcp = ByteArray(tcpLen)
+        tcp[0] = (srcPort shr 8).toByte()
+        tcp[1] = (srcPort and 0xFF).toByte()
+        tcp[2] = (dstPort shr 8).toByte()
+        tcp[3] = (dstPort and 0xFF).toByte()
+        tcp[4] = ((seqNum shr 24) and 0xFF).toByte()
+        tcp[5] = ((seqNum shr 16) and 0xFF).toByte()
+        tcp[6] = ((seqNum shr 8) and 0xFF).toByte()
+        tcp[7] = (seqNum and 0xFF).toByte()
+        tcp[8] = ((ackNum shr 24) and 0xFF).toByte()
+        tcp[9] = ((ackNum shr 16) and 0xFF).toByte()
+        tcp[10] = ((ackNum shr 8) and 0xFF).toByte()
+        tcp[11] = (ackNum and 0xFF).toByte()
+        tcp[12] = 0x50.toByte()
+        tcp[13] = flags
+        tcp[14] = (0xFFFF shr 8).toByte()
+        tcp[15] = (0xFFFF and 0xFF).toByte()
+        tcp[16] = 0; tcp[17] = 0
+        tcp[18] = 0; tcp[19] = 0
+
+        val tcpCsum = tcpChecksum(sip, dip, 6, tcpLen + data.size, tcp, data)
+        tcp[16] = ((tcpCsum shr 8) and 0xFF).toByte()
+        tcp[17] = (tcpCsum and 0xFF).toByte()
+
+        return ip + tcp + data
+    }
+
+    private fun tcpChecksum(srcIp: List<Int>, dstIp: List<Int>, protocol: Int, tcpLen: Int, tcp: ByteArray, data: ByteArray): Int {
+        var sum = 0
+        sum += (srcIp[0] shl 8) + srcIp[1]
+        sum += (srcIp[2] shl 8) + srcIp[3]
+        sum += (dstIp[0] shl 8) + dstIp[1]
+        sum += (dstIp[2] shl 8) + dstIp[3]
+        sum += protocol
+        sum += tcpLen
+        for (i in tcp.indices step 2) {
+            val b1 = tcp[i].toInt() and 0xFF
+            val b2 = if (i + 1 < tcp.size) (tcp[i + 1].toInt() and 0xFF) else 0
+            sum += (b1 shl 8) + b2
+        }
+        for (i in data.indices step 2) {
+            val b1 = data[i].toInt() and 0xFF
+            val b2 = if (i + 1 < data.size) (data[i + 1].toInt() and 0xFF) else 0
+            sum += (b1 shl 8) + b2
+        }
+        while (sum shr 16 != 0) sum = (sum and 0xFFFF) + (sum shr 16)
+        return sum.inv() and 0xFFFF
+    }
+
+    private fun writeToTun(pkt: ByteArray) {
+        try {
+            synchronized(tunOut) { tunOut.write(pkt); tunOut.flush() }
+        } catch (e: Exception) {
+            NativeLogger.e(TAG, "writeToTun: ${e.message}")
+        }
+    }
+
+    private fun handleUdp(pkt: ByteArray, ihl: Int) {
         if (pkt.size < ihl + 8) return
-        val srcPort = port(pkt, ihl)
         val dstPort = port(pkt, ihl + 2)
+        if (dstPort != 53) return
+        val srcPort = port(pkt, ihl)
         val dataOff = ihl + 8
         if (dataOff >= pkt.size) return
         val data = pkt.copyOfRange(dataOff, pkt.size)
-        if (dstPort != 53) return
         val srcIp = ipStr(pkt, 12)
         val dstIp = ipStr(pkt, 16)
 
@@ -145,83 +337,45 @@ class Tun2SocksRelay(
                 sock.close()
                 writeUdpResponse(srcIp, dstIp, srcPort, dstPort, resp)
             } catch (e: Exception) {
-                Log.e(TAG, "DNS: ${e.message}")
+                NativeLogger.e(TAG, "DNS error: ${e.message}")
             }
-        }
-    }
-
-    private fun writeIpPacket(srcIp: String, dstIp: String, srcPort: Int, dstPort: Int, data: ByteArray) {
-        try {
-            val ipHeader = ByteArray(20)
-            val tcpHeader = ByteArray(20)
-            val total = 20 + 20 + data.size
-
-            ipHeader[0] = 0x45.toByte()
-            ipHeader[1] = 0
-            ipHeader[2] = (total shr 8).toByte()
-            ipHeader[3] = (total and 0xFF).toByte()
-            ipHeader[8] = 64
-            ipHeader[9] = 6
-            val srcParts = srcIp.split(".").map { it.toInt() }
-            val dstParts = dstIp.split(".").map { it.toInt() }
-            for (i in 0..3) {
-                ipHeader[12 + i] = srcParts[i].toByte()
-                ipHeader[16 + i] = dstParts[i].toByte()
-            }
-            ipHeader[10] = 0; ipHeader[11] = 0
-            val ipCsum = checksum(ipHeader)
-            ipHeader[10] = (ipCsum shr 8).toByte()
-            ipHeader[11] = (ipCsum and 0xFF).toByte()
-
-            tcpHeader[0] = (srcPort shr 8).toByte()
-            tcpHeader[1] = (srcPort and 0xFF).toByte()
-            tcpHeader[2] = (dstPort shr 8).toByte()
-            tcpHeader[3] = (dstPort and 0xFF).toByte()
-            tcpHeader[12] = 0x50.toByte()
-            tcpHeader[13] = 0x18.toByte()
-
-            val pkt = ipHeader + tcpHeader + data
-            synchronized(tunOut) { tunOut.write(pkt) }
-        } catch (e: Exception) {
-            Log.e(TAG, "writeIpPacket: ${e.message}")
         }
     }
 
     private fun writeUdpResponse(clientIp: String, serverIp: String, clientPort: Int, serverPort: Int, data: ByteArray) {
         try {
             val total = 20 + 8 + data.size
-            val ipHeader = ByteArray(20)
-            ipHeader[0] = 0x45.toByte()
-            ipHeader[1] = 0
-            ipHeader[2] = (total shr 8).toByte()
-            ipHeader[3] = (total and 0xFF).toByte()
-            ipHeader[8] = 64
-            ipHeader[9] = 17
+            val ip = ByteArray(20)
+            ip[0] = 0x45.toByte()
+            ip[1] = 0
+            ip[2] = (total shr 8).toByte()
+            ip[3] = (total and 0xFF).toByte()
+            ip[8] = 64
+            ip[9] = 17
             val srcParts = serverIp.split(".").map { it.toInt() }
             val dstParts = clientIp.split(".").map { it.toInt() }
             for (i in 0..3) {
-                ipHeader[12 + i] = srcParts[i].toByte()
-                ipHeader[16 + i] = dstParts[i].toByte()
+                ip[12 + i] = srcParts[i].toByte()
+                ip[16 + i] = dstParts[i].toByte()
             }
-            ipHeader[10] = 0; ipHeader[11] = 0
-            val ipCsum = checksum(ipHeader)
-            ipHeader[10] = (ipCsum shr 8).toByte()
-            ipHeader[11] = (ipCsum and 0xFF).toByte()
+            ip[10] = 0; ip[11] = 0
+            val ipCsum = checksum(ip)
+            ip[10] = (ipCsum shr 8).toByte()
+            ip[11] = (ipCsum and 0xFF).toByte()
 
             val udpLen = 8 + data.size
-            val udpHeader = ByteArray(8)
-            udpHeader[0] = (serverPort shr 8).toByte()
-            udpHeader[1] = (serverPort and 0xFF).toByte()
-            udpHeader[2] = (clientPort shr 8).toByte()
-            udpHeader[3] = (clientPort and 0xFF).toByte()
-            udpHeader[4] = (udpLen shr 8).toByte()
-            udpHeader[5] = (udpLen and 0xFF).toByte()
-            udpHeader[6] = 0; udpHeader[7] = 0
+            val udp = ByteArray(8)
+            udp[0] = (serverPort shr 8).toByte()
+            udp[1] = (serverPort and 0xFF).toByte()
+            udp[2] = (clientPort shr 8).toByte()
+            udp[3] = (clientPort and 0xFF).toByte()
+            udp[4] = (udpLen shr 8).toByte()
+            udp[5] = (udpLen and 0xFF).toByte()
+            udp[6] = 0; udp[7] = 0
 
-            val pkt = ipHeader + udpHeader + data
-            synchronized(tunOut) { tunOut.write(pkt) }
+            synchronized(tunOut) { tunOut.write(ip + udp + data) }
         } catch (e: Exception) {
-            Log.e(TAG, "writeUdpResponse: ${e.message}")
+            NativeLogger.e(TAG, "writeUdpResponse: ${e.message}")
         }
     }
 
@@ -266,11 +420,19 @@ class Tun2SocksRelay(
     private fun port(pkt: ByteArray, off: Int) =
         ((pkt[off].toInt() and 0xFF) shl 8) or (pkt[off+1].toInt() and 0xFF)
 
+    private fun bytesToUInt(pkt: ByteArray, off: Int): Long =
+        (((pkt[off].toInt() and 0xFF).toLong() shl 24) or
+         ((pkt[off+1].toInt() and 0xFF).toLong() shl 16) or
+         ((pkt[off+2].toInt() and 0xFF).toLong() shl 8) or
+         (pkt[off+3].toInt() and 0xFF).toLong()) and 0xFFFFFFFFL
+
     private fun checksum(buf: ByteArray): Int {
         var sum = 0
-        for (i in 0 until buf.size - 1 step 2)
-            sum += ((buf[i].toInt() and 0xFF) shl 8) or (buf[i+1].toInt() and 0xFF)
-        if (buf.size % 2 != 0) sum += (buf.last().toInt() and 0xFF) shl 8
+        for (i in buf.indices step 2) {
+            val b1 = buf[i].toInt() and 0xFF
+            val b2 = if (i + 1 < buf.size) (buf[i + 1].toInt() and 0xFF) else 0
+            sum += (b1 shl 8) + b2
+        }
         while (sum shr 16 != 0) sum = (sum and 0xFFFF) + (sum shr 16)
         return sum.inv() and 0xFFFF
     }
@@ -278,17 +440,14 @@ class Tun2SocksRelay(
     inner class Session(
         val key: String,
         val srcIp: String, val srcPort: Int,
-        val dstIp: String, val dstPort: Int
+        val dstIp: String, val dstPort: Int,
+        seqNum: Long,
+        var serverSeq: Long
     ) {
-        private var socket: Socket? = null
-
-        suspend fun connect(socksHost: String, socksPort: Int) {
-            socket = socks5Connect(dstIp, dstPort)
-            if (socket == null) {
-                sessions.remove(key)
-                NativeLogger.e(TAG, "FAILED $dstIp:$dstPort")
-            }
-        }
+        enum class State { ESTABLISHED, CLOSING, LAST_ACK, CLOSED }
+        var state: State = State.ESTABLISHED
+        var rcvNxt: Long = (seqNum + 1) and 0xFFFFFFFFL
+        var socket: Socket? = null
 
         suspend fun startReading(onData: suspend (ByteArray) -> Unit) = withContext(Dispatchers.IO) {
             val sock = socket ?: return@withContext
@@ -306,20 +465,19 @@ class Tun2SocksRelay(
             } catch (e: Exception) { reason = e.message ?: "err" }
             finally {
                 NativeLogger.i(TAG, "DONE $dstIp:$dstPort ${totalRead}b reason=$reason")
-                sessions.remove(key); close()
-            }
-        }
-
-        fun write(data: ByteArray) {
-            try { socket?.getOutputStream()?.write(data); socket?.getOutputStream()?.flush() }
-            catch (e: Exception) {
-                NativeLogger.e(TAG, "WRITE ERR $dstIp:$dstPort ${e.message}")
-                sessions.remove(key); close()
+                if (state == State.CLOSING) {
+                    sendFinAck(this@Session)
+                }
+                state = State.CLOSED
+                sessions.remove(key)
+                close()
             }
         }
 
         fun close() {
+            state = State.CLOSED
             try { socket?.close() } catch (_: Exception) {}
+            socket = null
         }
     }
 }
