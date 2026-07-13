@@ -47,7 +47,11 @@ class Tun2SocksRelay(
                     NativeLogger.i(TAG, "readLoop: packet #$packetCount len=$len")
                 handlePacket(buf.copyOf(len))
             } catch (_: java.io.InterruptedIOException) { break }
-            catch (e: Exception) { if (isActive) Log.e(TAG, "readLoop: ${e.message}"); break }
+            catch (e: Exception) {
+                if (isActive) {
+                    NativeLogger.e(TAG, "readLoop: packet #$packetCount error: ${e.message}")
+                }
+            }
         }
         NativeLogger.i(TAG, "readLoop: terminated after $packetCount packets")
     }
@@ -81,9 +85,15 @@ class Tun2SocksRelay(
             val session = Session(key, srcIp, srcPort, dstIp, dstPort)
             sessions[key] = session
             scope.launch {
-                session.connect(socksHost, socksPort)
-                session.startReading { data ->
-                    writeIpPacket(dstIp, srcIp, dstPort, srcPort, data)
+                try {
+                    session.connect(socksHost, socksPort)
+                    session.startReading { data ->
+                        writeIpPacket(dstIp, srcIp, dstPort, srcPort, data)
+                    }
+                } catch (e: Exception) {
+                    NativeLogger.e(TAG, "Session coroutine: ${e.message}")
+                    sessions.remove(key)
+                    session.close()
                 }
             }
         }

@@ -256,7 +256,7 @@ class APIHandler(BaseHTTPRequestHandler):
                 return self._send({"success": False, "message": "Invalid activation code"}, 403)
             conn = get_db()
             cfg = conn.execute(
-                "SELECT * FROM vpn_configs WHERE user_id = ?", (user["id"],)
+                "SELECT * FROM vpn_configs WHERE user_id = ? ORDER BY tier DESC", (user["id"],)
             ).fetchone()
             conn.close()
             if cfg:
@@ -268,8 +268,11 @@ class APIHandler(BaseHTTPRequestHandler):
                     "transport": cfg["transport"],
                     "tls": bool(cfg["tls"]),
                     "sni": cfg["sni"] or cfg["server_address"],
+                    "host": cfg["host"] or cfg["sni"] or cfg["server_address"],
+                    "flow": cfg["flow"] or "",
                     "public_key": cfg["public_key"] or "",
-                    "short_id": cfg["short_id"] or ""
+                    "short_id": cfg["short_id"] or "",
+                    "xray_uuid": cfg["xray_uuid"] or "6e3b3083-f69d-4c98-a6d8-a8134a6d99f6"
                 })
             return self._send({"success": False, "message": "No config assigned"}, 404)
 
@@ -318,7 +321,7 @@ class APIHandler(BaseHTTPRequestHandler):
             conn.commit()
 
             cfg = conn.execute(
-                "SELECT * FROM vpn_configs WHERE user_id = ?", (user["id"],)
+                "SELECT * FROM vpn_configs WHERE user_id = ? ORDER BY tier DESC", (user["id"],)
             ).fetchone()
             conn.close()
 
@@ -331,8 +334,11 @@ class APIHandler(BaseHTTPRequestHandler):
                     "transport": cfg["transport"],
                     "tls": bool(cfg["tls"]),
                     "sni": cfg["sni"] or cfg["server_address"],
+                    "host": cfg["host"] or cfg["sni"] or cfg["server_address"],
+                    "flow": cfg["flow"] or "",
                     "public_key": cfg["public_key"] or "",
-                    "short_id": cfg["short_id"] or ""
+                    "short_id": cfg["short_id"] or "",
+                    "xray_uuid": cfg["xray_uuid"] or "6e3b3083-f69d-4c98-a6d8-a8134a6d99f6"
                 }
 
             return self._send({
