@@ -107,7 +107,7 @@ class XrayManager(private val context: Context) {
     ): File {
         val sb = StringBuilder()
         sb.appendLine("{")
-        sb.appendLine("""  "log": { "loglevel": "debug" },""")
+        sb.appendLine("""  "log": { "loglevel": "warning" },""")
         sb.appendLine("""  "inbounds": [{""")
         sb.appendLine("""    "port": $socksPort,""")
         sb.appendLine("""    "listen": "127.0.0.1",""")

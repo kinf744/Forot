@@ -90,7 +90,7 @@ class Tun2SocksRelay(
         val key = "$srcIp:$srcPort-$dstIp:$dstPort"
 
         if (syn && !sessions.containsKey(key)) {
-            NativeLogger.i(TAG, "handleTcp: NEW TCP $srcIp:$srcPort -> $dstIp:$dstPort (sessions=${sessions.size})")
+            NativeLogger.i(TAG, "$srcIp -> $dstIp:$dstPort [${sessions.size}]")
             val session = Session(key, srcIp, srcPort, dstIp, dstPort)
             sessions[key] = session
             scope.launch {
@@ -226,33 +226,28 @@ class Tun2SocksRelay(
     }
 
     private fun socks5Connect(host: String, port: Int): Socket? {
-        NativeLogger.i(TAG, "socks5Connect: connecting to $socksHost:$socksPort for $host:$port")
         return try {
             val sock = Socket()
             sock.soTimeout = 10000
             sock.connect(InetSocketAddress(socksHost, socksPort), 5000)
-            NativeLogger.i(TAG, "socks5Connect: TCP to $socksHost:$socksPort established")
             val out = sock.getOutputStream()
             val inp = sock.getInputStream()
             out.write(byteArrayOf(0x05, 0x01, 0x00)); out.flush()
             val greetingResp = ByteArray(2)
             var gr = 0; while (gr < 2) gr += inp.read(greetingResp, gr, 2 - gr)
-            NativeLogger.i(TAG, "socks5Connect: greeting resp=${greetingResp[0]},${greetingResp[1]}")
             val hostBytes = host.toByteArray()
             out.write(byteArrayOf(0x05, 0x01, 0x00, 0x03, hostBytes.size.toByte()) +
                 hostBytes + byteArrayOf((port shr 8).toByte(), (port and 0xFF).toByte()))
             out.flush()
             val resp = ByteArray(256); var total = 0
             while (total < 4) total += inp.read(resp, total, 4 - total)
-            NativeLogger.i(TAG, "socks5Connect: connect resp ver=${resp[0]} rep=${resp[1]} atyp=${resp[3]}")
             if (resp[1] != 0x00.toByte()) {
-                NativeLogger.e(TAG, "socks5Connect: SOCKS rejected $host:$port rep=${resp[1]}")
+                NativeLogger.e(TAG, "SOCKS rejected $host:$port rep=${resp[1]}")
                 sock.close(); return null
             }
-            NativeLogger.i(TAG, "socks5Connect: SOCKS tunnel OK for $host:$port")
             sock
         } catch (e: Exception) {
-            NativeLogger.e(TAG, "socks5Connect: EXCEPTION $host:$port -> ${e.message}")
+            NativeLogger.e(TAG, "SOCKS FAIL $host:$port ${e.message}")
             null
         }
     }
@@ -280,19 +275,15 @@ class Tun2SocksRelay(
         private var socket: Socket? = null
 
         suspend fun connect(socksHost: String, socksPort: Int) {
-            NativeLogger.i(TAG, "Session.connect: $dstIp:$dstPort via SOCKS5")
             socket = socks5Connect(dstIp, dstPort)
             if (socket == null) {
                 sessions.remove(key)
-                NativeLogger.e(TAG, "Session.connect: FAILED $dstIp:$dstPort")
-            } else {
-                NativeLogger.i(TAG, "Session.connect: OK $dstIp:$dstPort socket=${socket}")
+                NativeLogger.e(TAG, "FAILED $dstIp:$dstPort")
             }
         }
 
         suspend fun startReading(onData: suspend (ByteArray) -> Unit) = withContext(Dispatchers.IO) {
             val sock = socket ?: return@withContext
-            NativeLogger.i(TAG, "Session.startReading: begin for $dstIp:$dstPort")
             val buf = ByteArray(65536)
             var totalRead = 0L
             try {
@@ -304,16 +295,15 @@ class Tun2SocksRelay(
                 }
             } catch (_: Exception) { }
             finally {
-                NativeLogger.i(TAG, "Session.startReading: end for $dstIp:$dstPort totalRead=$totalRead")
+                NativeLogger.i(TAG, "DONE $dstIp:$dstPort ${totalRead}b")
                 sessions.remove(key); close()
             }
         }
 
         fun write(data: ByteArray) {
-            NativeLogger.i(TAG, "Session.write: $dstIp:$dstPort ${data.size} bytes")
             try { socket?.getOutputStream()?.write(data); socket?.getOutputStream()?.flush() }
             catch (e: Exception) {
-                NativeLogger.e(TAG, "Session.write: EXCEPTION $dstIp:$dstPort -> ${e.message}")
+                NativeLogger.e(TAG, "WRITE ERR $dstIp:$dstPort ${e.message}")
                 sessions.remove(key); close()
             }
         }
