@@ -387,7 +387,7 @@ class AppProvider extends ChangeNotifier {
         'xray_uuid': uuid,
         'zivpn_port': '5667',
         'zivpn_password': uuid,
-        'zivpn_obfs': 'zivpn',
+        'zivpn_obfs': 'hu``hqb`c',
       },
     ];
 

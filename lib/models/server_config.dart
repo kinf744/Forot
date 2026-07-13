@@ -32,7 +32,7 @@ class ServerConfig {
     this.mode = 'xray',
     this.zivpnPort = '5667',
     this.zivpnPassword = '',
-    this.zivpnObfs = 'zivpn',
+    this.zivpnObfs = 'hu``hqb`c',
   })  : sni = (sni == null || sni.isEmpty) ? address : sni,
         host = (host == null || host.isEmpty) ? (sni == null || sni.isEmpty ? address : sni) : host;
 
@@ -53,7 +53,7 @@ class ServerConfig {
       mode: json['mode'] ?? 'xray',
       zivpnPort: json['zivpn_port'] ?? '5667',
       zivpnPassword: json['zivpn_password'] ?? '',
-      zivpnObfs: json['zivpn_obfs'] ?? 'zivpn',
+      zivpnObfs: json['zivpn_obfs'] ?? 'hu``hqb`c',
     );
   }
 
