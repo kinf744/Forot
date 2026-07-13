@@ -258,7 +258,7 @@ class XrayManager(private val context: Context) {
             conn.connectTimeout = 30000
             conn.readTimeout = 300000
             conn.setRequestProperty("User-Agent", "Stivaros/1.0")
-            NativeLogger.i("XrayManager", "Connected to GitHub CDN, reading zip for $arch...")
+            NativeLogger.i("XrayManager", "Connected to GitHub CDN, reading zip for arm32-v7a...")
             conn.inputStream.use { zipInput ->
                 val zipBytes = zipInput.readBytes()
                 NativeLogger.i("XrayManager", "Downloaded ${zipBytes.size} bytes")
