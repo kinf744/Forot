@@ -30,9 +30,9 @@ class ServerConfig {
     this.configId,
     this.xrayUuid,
     this.mode = 'xray',
-    this.zivpnPort = '6000-7750,7751-9500,9501-11250,11251-13000,13001-14750,14751-16500,16501-18250,18251-19999',
+    this.zivpnPort = '5667',
     this.zivpnPassword = '',
-    this.zivpnObfs = 'hu``hqb`c',
+    this.zivpnObfs = 'zivpn',
   })  : sni = (sni == null || sni.isEmpty) ? address : sni,
         host = (host == null || host.isEmpty) ? (sni == null || sni.isEmpty ? address : sni) : host;
 
@@ -51,9 +51,9 @@ class ServerConfig {
       configId: json['config_id'],
       xrayUuid: json['xray_uuid'],
       mode: json['mode'] ?? 'xray',
-      zivpnPort: json['zivpn_port'] ?? '6000-7750,7751-9500,9501-11250,11251-13000,13001-14750,14751-16500,16501-18250,18251-19999',
+      zivpnPort: json['zivpn_port'] ?? '5667',
       zivpnPassword: json['zivpn_password'] ?? '',
-      zivpnObfs: json['zivpn_obfs'] ?? 'hu``hqb`c',
+      zivpnObfs: json['zivpn_obfs'] ?? 'zivpn',
     );
   }
 
