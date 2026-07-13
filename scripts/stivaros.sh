@@ -116,7 +116,7 @@ def init_db():
             mode TEXT DEFAULT '',
             flow TEXT DEFAULT '',
             tier TEXT DEFAULT '150',
-            xray_uuid TEXT DEFAULT '6e3b3083-f69d-4c98-a6d8-a8134a6d99f6',
+            xray_uuid TEXT DEFAULT 'cfe75234-b0d9-477d-b30f-9d24654b2487',
             zivpn_port TEXT DEFAULT '6000-7750,7751-9500,9501-11250,11251-13000,13001-14750,14751-16500,16501-18250,18251-19999',
             zivpn_password TEXT DEFAULT '',
             zivpn_obfs TEXT DEFAULT 'hu``hqb`c',
@@ -247,7 +247,7 @@ class APIHandler(BaseHTTPRequestHandler):
                     "public_key": cfg["public_key"] or "",
                     "short_id": cfg["short_id"] or "",
                     "config_id": cfg["id"],
-                    "xray_uuid": cfg["xray_uuid"] or "6e3b3083-f69d-4c98-a6d8-a8134a6d99f6",
+                    "xray_uuid": cfg["xray_uuid"] or "cfe75234-b0d9-477d-b30f-9d24654b2487",
                     "zivpn_port": cfg.get("zivpn_port") or "6000-7750,7751-9500,9501-11250,11251-13000,13001-14750,14751-16500,16501-18250,18251-19999",
                     "zivpn_password": cfg.get("zivpn_password") or "",
                     "zivpn_obfs": cfg.get("zivpn_obfs") or "hu``hqb`c"
@@ -280,7 +280,7 @@ class APIHandler(BaseHTTPRequestHandler):
                     "flow": cfg["flow"] or "",
                     "public_key": cfg["public_key"] or "",
                     "short_id": cfg["short_id"] or "",
-                    "xray_uuid": cfg["xray_uuid"] or "6e3b3083-f69d-4c98-a6d8-a8134a6d99f6",
+                    "xray_uuid": cfg["xray_uuid"] or "cfe75234-b0d9-477d-b30f-9d24654b2487",
                     "mode": cfg["mode"] or "xray"
                 })
             return self._send({"success": False, "message": "No config assigned"}, 404)
@@ -331,7 +331,7 @@ class APIHandler(BaseHTTPRequestHandler):
                     "short_id": cfg["short_id"] or "",
                     "tier": cfg["tier"],
                     "isp": cfg["isp"],
-                    "xray_uuid": cfg["xray_uuid"] or "6e3b3083-f69d-4c98-a6d8-a8134a6d99f6",
+                    "xray_uuid": cfg["xray_uuid"] or "cfe75234-b0d9-477d-b30f-9d24654b2487",
                     "mode": mode_label,
                     "zivpn_port": cfg.get("zivpn_port") or "6000-7750,7751-9500,9501-11250,11251-13000,13001-14750,14751-16500,16501-18250,18251-19999",
                     "zivpn_password": cfg.get("zivpn_password") or "",
@@ -439,7 +439,7 @@ class APIHandler(BaseHTTPRequestHandler):
                     "flow": cfg["flow"] or "",
                     "public_key": cfg["public_key"] or "",
                     "short_id": cfg["short_id"] or "",
-                    "xray_uuid": cfg["xray_uuid"] or "6e3b3083-f69d-4c98-a6d8-a8134a6d99f6",
+                    "xray_uuid": cfg["xray_uuid"] or "cfe75234-b0d9-477d-b30f-9d24654b2487",
                     "mode": cfg["mode"] or "xray"
                 }
 
@@ -603,8 +603,8 @@ create_user() {
     server_addr=${server_addr:-kiaje2.kingom.ggff.net}
     read -p "Server port [default: 443]: " server_port
     server_port=${server_port:-443}
-    read -p "Xray UUID [default: 6e3b3083-f69d-4c98-a6d8-a8134a6d99f6]: " xray_uuid
-    xray_uuid=${xray_uuid:-6e3b3083-f69d-4c98-a6d8-a8134a6d99f6}
+    read -p "Xray UUID [default: cfe75234-b0d9-477d-b30f-9d24654b2487]: " xray_uuid
+    xray_uuid=${xray_uuid:-cfe75234-b0d9-477d-b30f-9d24654b2487}
 
     # Add name column if not exists (migration)
     sqlite3 "$DB_PATH" "ALTER TABLE users ADD COLUMN name TEXT DEFAULT '';" 2>/dev/null || true
@@ -810,7 +810,7 @@ uninstall_all() {
 
 XRAY_DOMAIN="kiaje2.kingom.ggff.net"
 XRAY_PATH="/vless-xhttp"
-XRAY_UUID="6e3b3083-f69d-4c98-a6d8-a8134a6d99f6"
+XRAY_UUID="cfe75234-b0d9-477d-b30f-9d24654b2487"
 
 xray_install() {
     banner
