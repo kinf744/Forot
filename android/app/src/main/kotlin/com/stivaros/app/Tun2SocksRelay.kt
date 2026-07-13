@@ -228,7 +228,7 @@ class Tun2SocksRelay(
     private fun socks5Connect(host: String, port: Int): Socket? {
         return try {
             val sock = Socket()
-            sock.soTimeout = 10000
+            sock.soTimeout = 30000
             sock.connect(InetSocketAddress(socksHost, socksPort), 5000)
             val out = sock.getOutputStream()
             val inp = sock.getInputStream()
@@ -294,6 +294,7 @@ class Tun2SocksRelay(
             val sock = socket ?: return@withContext
             val buf = ByteArray(65536)
             var totalRead = 0L
+            var reason = "EOF"
             try {
                 while (true) {
                     val n = sock.getInputStream().read(buf)
@@ -301,9 +302,10 @@ class Tun2SocksRelay(
                     totalRead += n
                     onData(buf.copyOf(n))
                 }
-            } catch (_: Exception) { }
+            } catch (e: java.net.SocketTimeoutException) { reason = "timeout"
+            } catch (e: Exception) { reason = e.message ?: "err" }
             finally {
-                NativeLogger.i(TAG, "DONE $dstIp:$dstPort ${totalRead}b")
+                NativeLogger.i(TAG, "DONE $dstIp:$dstPort ${totalRead}b reason=$reason")
                 sessions.remove(key); close()
             }
         }

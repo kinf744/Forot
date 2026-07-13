@@ -212,7 +212,7 @@ class XrayManager(private val context: Context) {
         }
 
         sb.appendLine("""    },""")
-        sb.appendLine("""    "mux": { "enabled": false }""")
+        sb.appendLine("""    "mux": { "enabled": true, "concurrency": 8 }""")
         sb.appendLine("""  }],""")
         sb.appendLine("""  "routing": { "rules": [] }""")
         sb.appendLine("}")
