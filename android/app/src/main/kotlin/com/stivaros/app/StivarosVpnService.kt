@@ -151,7 +151,7 @@ class StivarosVpnService : VpnService() {
                 NativeLogger.i("VpnService", "Starting HevTun2Socks (fd=${fd.fd}, socksPort=$socksPort)")
                 HevTun2Socks.init()
                 if (HevTun2Socks.isAvailable) {
-                    HevTun2Socks.start(this, fd.fd, socksPort, 1400)
+                    HevTun2Socks.start(this@StivarosVpnService, fd.fd, socksPort, 1400)
                     updateStatus("CONNECTED", "Connected")
                     updateNotification("Connected")
                     NativeLogger.i("VpnService", "VPN fully connected via HevTun2Socks!")
