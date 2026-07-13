@@ -108,14 +108,6 @@ class XrayManager(private val context: Context) {
         val sb = StringBuilder()
         sb.appendLine("{")
         sb.appendLine("""  "log": { "loglevel": "debug" },""")
-        if (serverIp.isNotEmpty()) {
-            sb.appendLine("""  "dns": {""")
-            sb.appendLine("""    "hosts": {""")
-            sb.appendLine("""      "$address": "$serverIp"""")
-            sb.appendLine("""    },""")
-            sb.appendLine("""    "servers": ["8.8.8.8"]""")
-            sb.appendLine("""  },""")
-        }
         sb.appendLine("""  "inbounds": [{""")
         sb.appendLine("""    "port": $socksPort,""")
         sb.appendLine("""    "listen": "127.0.0.1",""")
@@ -129,7 +121,7 @@ class XrayManager(private val context: Context) {
             "vless" -> {
                 sb.appendLine("""    "settings": {""")
                 sb.appendLine("""      "vnext": [{""")
-                sb.appendLine("""        "address": "$address",""")
+                sb.appendLine("""        "address": "${if (serverIp.isNotEmpty()) serverIp else address}",""")
                 sb.appendLine("""        "port": $port,""")
                 sb.appendLine("""        "users": [{""")
                 sb.appendLine("""          "id": "$uuid",""")
@@ -142,7 +134,7 @@ class XrayManager(private val context: Context) {
             "vmess" -> {
                 sb.appendLine("""    "settings": {""")
                 sb.appendLine("""      "vnext": [{""")
-                sb.appendLine("""        "address": "$address",""")
+                sb.appendLine("""        "address": "${if (serverIp.isNotEmpty()) serverIp else address}",""")
                 sb.appendLine("""        "port": $port,""")
                 sb.appendLine("""        "users": [{""")
                 sb.appendLine("""          "id": "$uuid",""")
@@ -155,7 +147,7 @@ class XrayManager(private val context: Context) {
             "trojan" -> {
                 sb.appendLine("""    "settings": {""")
                 sb.appendLine("""      "servers": [{""")
-                sb.appendLine("""        "address": "$address",""")
+                sb.appendLine("""        "address": "${if (serverIp.isNotEmpty()) serverIp else address}",""")
                 sb.appendLine("""        "port": $port,""")
                 sb.appendLine("""        "password": "$uuid"""")
                 sb.appendLine("""      }]""")
