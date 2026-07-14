@@ -565,8 +565,8 @@ EOF
     local API_URL="https://$API_DOMAIN_INPUT:$API_PORT_INPUT"
     echo "$API_URL" > "$INSTALL_DIR/api_domain.txt"
     msg "API URL saved: $API_URL"
-    echo -e "When building the APK, use:"
-    echo -e "  flutter build apk --dart-define=API_URL=$API_URL\n"
+    echo -e "Before building the APK, edit lib/services/api_service.dart"
+    echo -e "and set: static const String baseUrl = '$API_URL';"
     read -p "Press Enter to continue..."
 
     # Firewall
@@ -1484,6 +1484,38 @@ tunnel_menu() {
 }
 
 # ──────────────────────────────────────────────
+# ──────────────────────────────────────────────
+#  Set API Domain (Option 7)
+# ──────────────────────────────────────────────
+
+setup_api_domain() {
+    banner
+    echo -e "${BOLD}Set API Domain for Application${NC}\n"
+    echo -e "This domain is hardcoded in the app (api_service.dart)."
+    echo -e "Define the URL the app uses to reach the Stivaros API.\n"
+
+    local domain port api_url
+    read -p "API domain (e.g. api-v1.kingom.ggff.net) [api-v1.kingom.ggff.net]: " domain
+    domain=${domain:-"api-v1.kingom.ggff.net"}
+    read -p "API port [5443]: " port
+    port=${port:-5443}
+
+    api_url="https://$domain:$port"
+    echo "$api_url" > "$INSTALL_DIR/api_domain.txt"
+    msg "API URL saved: $api_url"
+
+    echo
+    echo -e "${CYAN}══════════════════════════════════════${NC}"
+    echo -e " Edit this file before building the APK:"
+    echo -e " ${BOLD}lib/services/api_service.dart${NC}"
+    echo
+    echo -e " Line 5:"
+    echo -e " ${GREEN}static const String baseUrl = '$api_url';${NC}"
+    echo -e "${CYAN}══════════════════════════════════════${NC}"
+    echo
+    pause
+}
+
 #  Main Menu
 # ──────────────────────────────────────────────
 
@@ -1497,10 +1529,11 @@ menu() {
         echo -e "  ${CYAN}4${NC})  Delete User(s)"
         echo -e "  ${CYAN}5${NC})  Uninstall (complete)"
         echo -e "  ${CYAN}6${NC})  TUNNEL VPN (Xray / ZIVPN)"
+        echo -e "  ${CYAN}7${NC})  Set API Domain (for app)"
         echo
         echo -e "  ${YELLOW}0${NC})  Exit"
         echo
-        read -p "Select an option [0-6]: " choice
+        read -p "Select an option [0-7]: " choice
 
         case "$choice" in
             1) install_all ;;
@@ -1509,6 +1542,7 @@ menu() {
             4) delete_users ;;
             5) uninstall_all ;;
             6) tunnel_menu ;;
+            7) setup_api_domain ;;
             0) echo -e "\n${GREEN}Goodbye!${NC}"; exit 0 ;;
             *) warn "Invalid option" ;;
         esac
