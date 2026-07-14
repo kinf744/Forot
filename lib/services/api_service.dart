@@ -3,13 +3,9 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   static String get baseUrl {
-    const p1 = 'https://';
-    const p2 = 'api-v1';
-    const p3 = '.kingom';
-    const p4 = '.ggff';
-    const p5 = '.net';
-    const p6 = ':5443';
-    return '$p1$p2$p3$p4$p5$p6';
+    const envUrl = String.fromEnvironment('API_URL');
+    if (envUrl.isNotEmpty) return envUrl;
+    return 'https://api-v1.kingom.ggff.net:5443';
   }
   static const Duration timeout = Duration(seconds: 60);
 

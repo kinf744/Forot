@@ -553,6 +553,22 @@ EOF
     systemctl restart stivaros-api
     msg "API service started on port $API_PORT"
 
+    # API domain for app configuration
+    echo
+    echo -e "${CYAN}── API Domain Configuration ──${NC}"
+    echo -e "The app needs to know the API domain to fetch VPN configs."
+    echo -e "This is the domain where nginx exposes the API (e.g. api-v1.kingom.ggff.net:5443)\n"
+    read -p "API domain [api-v1.kingom.ggff.net]: " API_DOMAIN_INPUT
+    API_DOMAIN_INPUT=${API_DOMAIN_INPUT:-"api-v1.kingom.ggff.net"}
+    read -p "API port [5443]: " API_PORT_INPUT
+    API_PORT_INPUT=${API_PORT_INPUT:-5443}
+    local API_URL="https://$API_DOMAIN_INPUT:$API_PORT_INPUT"
+    echo "$API_URL" > "$INSTALL_DIR/api_domain.txt"
+    msg "API URL saved: $API_URL"
+    echo -e "When building the APK, use:"
+    echo -e "  flutter build apk --dart-define=API_URL=$API_URL\n"
+    read -p "Press Enter to continue..."
+
     # Firewall
     if command -v ufw &>/dev/null; then
         ufw allow "$API_PORT/tcp" 2>/dev/null || true

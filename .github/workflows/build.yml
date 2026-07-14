@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      api_url:
+        description: 'API URL (e.g. https://api-v1.kingom.ggff.net:5443)'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   build:
@@ -40,7 +46,14 @@ jobs:
           echo "libxray.so: $(ls -lh android/app/src/main/jniLibs/armeabi-v7a/libxray.so)"
 
       - name: Build APK
-        run: flutter build apk --release --obfuscate --split-debug-info=debug-info
+        run: |
+          API_URL="${{ github.event.inputs.api_url }}"
+          if [ -n "$API_URL" ]; then
+            flutter build apk --release --obfuscate --split-debug-info=debug-info \
+              --dart-define=API_URL="$API_URL"
+          else
+            flutter build apk --release --obfuscate --split-debug-info=debug-info
+          fi
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
