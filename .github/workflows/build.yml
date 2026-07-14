@@ -45,6 +45,10 @@ jobs:
           set -o pipefail
           flutter build apk --release 2>&1 | tee build.log
 
+      - name: Show build log
+        if: failure()
+        run: cat build.log
+
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
