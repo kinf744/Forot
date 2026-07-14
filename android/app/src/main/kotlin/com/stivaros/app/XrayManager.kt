@@ -125,8 +125,11 @@ class XrayManager(private val context: Context) {
                 sb.appendLine("""        "port": $port,""")
                 sb.appendLine("""        "users": [{""")
                 sb.appendLine("""          "id": "$uuid",""")
-                sb.appendLine("""          "encryption": "none",""")
-                sb.appendLine("""          "flow": "$flow"""")
+                sb.appendLine("""          "encryption": "none"""")
+
+                if (flow.isNotBlank()) {
+                    sb.appendLine("""          ,"flow": "$flow"""")
+                }
                 sb.appendLine("""        }]""")
                 sb.appendLine("""      }]""")
                 sb.appendLine("""    },""")
@@ -204,7 +207,6 @@ class XrayManager(private val context: Context) {
             sb.appendLine("""      "security": "tls",""")
             sb.appendLine("""      "tlsSettings": {""")
             sb.appendLine("""        "serverName": "$sni",""")
-            sb.appendLine("""        "allowInsecure": true,""")
             sb.appendLine("""        "fingerprint": "chrome"""")
             sb.appendLine("""      }""")
         } else {
@@ -212,9 +214,9 @@ class XrayManager(private val context: Context) {
         }
 
         sb.appendLine("""    },""")
-        sb.appendLine("""    "mux": { "enabled": true, "concurrency": 8 }""")
+        sb.appendLine("""    "mux": { "enabled": false }""")
         sb.appendLine("""  }],""")
-        sb.appendLine("""  "routing": { "rules": [] }""")
+        sb.appendLine("""  "routing": { "domainStrategy": "AsIs", "rules": [] }""")
         sb.appendLine("}")
 
         val file = File(context.filesDir, "xray_config.json")
