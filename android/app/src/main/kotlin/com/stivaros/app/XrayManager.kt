@@ -148,7 +148,7 @@ class XrayManager(private val context: Context) {
             "xhttp" -> {
                 sb.appendLine("""      "xhttpSettings": {""")
                 sb.appendLine("""        "path": "/vless-xhttp",""")
-                sb.appendLine("""        "mode": "auto",""")
+                sb.appendLine("""        "mode": "stream-up",""")
                 sb.appendLine("""        "host": "$host",""")
                 sb.appendLine("""        "scMaxConcurrentPosts": 16,""")
                 sb.appendLine("""        "scMinPostsIntervalMs": 10,""")
@@ -197,7 +197,7 @@ class XrayManager(private val context: Context) {
         }
 
         sb.appendLine("""    },""")
-        sb.appendLine("""    "mux": { "enabled": false }""")
+        sb.appendLine("""    "mux": { "enabled": true, "concurrency": 8 }""")
         sb.appendLine("""  }],""")
         sb.appendLine("""  "routing": { "rules": [] }""")
         sb.appendLine("}")

@@ -149,7 +149,7 @@ class StivarosVpnService : VpnService() {
             try {
                 NativeLogger.i("VpnService", "startSocksRelay: fd=$fd socksPort=$socksPort")
                 val relay = Tun2SocksRelay(
-                    ParcelFileDescriptor.fromFd(fd).fileDescriptor,
+                    ParcelFileDescriptor.fromFd(fd),
                     "127.0.0.1", socksPort
                 )
                 relay.start()

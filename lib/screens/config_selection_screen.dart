@@ -36,7 +36,7 @@ class _ConfigSelectionScreenState extends State<ConfigSelectionScreen> {
       uuid: provider.user!.uuid,
       activationCode: provider.user!.activationCode,
       mode: mode,
-      tier: '150',
+      tier: provider.currentTier,
     );
 
     if (!mounted) return;
@@ -44,7 +44,8 @@ class _ConfigSelectionScreenState extends State<ConfigSelectionScreen> {
     if (result['success'] == true) {
       final serverConfig = ServerConfig.fromJson(result);
       final isp = result['isp'] as String? ?? 'unknown';
-      provider.setAutoConfig(serverConfig, isp, label);
+      final tier = result['tier'] as String? ?? '150';
+      provider.setAutoConfig(serverConfig, isp, label, tier: tier);
 
       _statusMessage = 'Opérateur détecté : ${isp.toUpperCase()}';
       setState(() {});

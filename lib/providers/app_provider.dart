@@ -193,10 +193,19 @@ class AppProvider extends ChangeNotifier {
       notifyListeners();
       return;
     }
+
+    // Find the correct config index for the current tier
+    if (_currentTier == '100') {
+      final idx = _configs.indexWhere((c) => (c['tier'] as String?) == '100');
+      if (idx >= 0) {
+        _selectedConfigIndex = idx;
+        await StorageService.saveSelectedConfigIndex(idx);
+      }
+    }
     final cfg = _configs[_selectedConfigIndex!];
     _applyConfig(cfg);
 
-    FileLogger().i('AppProvider', 'Quota handler: connecting with tier=$_currentTier');
+    FileLogger().i('AppProvider', 'Quota handler: connecting with tier=$_currentTier config=${cfg['label']}');
     if (_serverConfig == null) return;
     final c = _serverConfig!;
     final connected = await VpnService.connect(
@@ -396,7 +405,9 @@ class AppProvider extends ChangeNotifier {
     }
 
     final config = _serverConfig!;
-    _currentTier = '150';
+    _currentTier = _selectedConfigIndex != null && _selectedConfigIndex! < _configs.length
+        ? (_configs[_selectedConfigIndex!]['tier'] as String? ?? '150')
+        : '150';
     _retryCount = 0;
     _connectionStartTime = null;
     _quotaExhausted = false;
