@@ -205,7 +205,9 @@ class APIHandler(BaseHTTPRequestHandler):
             user = self._get_user_by_uuid(device_id)
             if not user:
                 conn = get_db()
-                user = conn.execute("SELECT * FROM users WHERE phone = ?", (device_id,)).fetchone()
+                user = conn.execute("SELECT * FROM users WHERE device_install_id = ?", (device_id,)).fetchone()
+                if not user:
+                    user = conn.execute("SELECT * FROM users WHERE phone = ?", (device_id,)).fetchone()
                 conn.close()
             if user and user["active"]:
                 exp = user["expires_at"]
