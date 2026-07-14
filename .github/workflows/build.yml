@@ -40,7 +40,7 @@ jobs:
           echo "libxray.so: $(ls -lh android/app/src/main/jniLibs/armeabi-v7a/libxray.so)"
 
       - name: Build APK
-        run: flutter build apk --release --obfuscate --split-debug-info=debug-info
+        run: flutter build apk --release 2>&1
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
