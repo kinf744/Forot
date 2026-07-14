@@ -169,7 +169,7 @@ class StivarosVpnService : VpnService() {
                 NativeLogger.i("VpnService", "Builder params: mtu=1400 blocking=true")
 
                 val builder = Builder()
-                    .setSession("Stivaros")
+                    .setSession("ST")
                     .addAddress("10.0.0.2", 24)
                     .addRoute("0.0.0.0", 0)
                     .addDnsServer("8.8.8.8")
@@ -341,7 +341,7 @@ class StivarosVpnService : VpnService() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                CHANNEL_ID, "Stivaros VPN",
+                CHANNEL_ID, "ST",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "VPN connection status"
@@ -363,7 +363,7 @@ class StivarosVpnService : VpnService() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Stivaros VPN")
+            .setContentTitle("ST")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setContentIntent(pendingIntent)
