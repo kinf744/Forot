@@ -1176,19 +1176,27 @@ xray_install() {
     banner
     echo -e "${BOLD}Install Xray Tunnel${NC}\n"
 
-    if ! command -v xray &>/dev/null; then
+    apt-get install -y -qq unzip 2>/dev/null || true
+
+    if ! command -v xray &>/dev/null || [[ "$(xray version 2>/dev/null | head -1 | awk '{print $2}')" != "26.1.23" ]]; then
         info "Downloading Xray-core v26.1.23..."
-        bash <(curl -fsSL https://raw.githubusercontent.com/XTLS/Xray-install/main/install-release.sh) --version v26.1.23 2>&1
+        local arch
+        arch=$(uname -m)
+        case "$arch" in
+            x86_64|amd64) arch="64" ;;
+            aarch64|arm64) arch="arm64-v8a" ;;
+            *) error "Unsupported arch: $arch"; pause; return 1 ;;
+        esac
+        local tmpdir
+        tmpdir=$(mktemp -d)
+        curl -fsSL "https://github.com/XTLS/Xray-core/releases/download/v26.1.23/Xray-linux-${arch}.zip" -o "$tmpdir/xray.zip"
+        unzip -qo "$tmpdir/xray.zip" -d "$tmpdir" xray
+        cp "$tmpdir/xray" /usr/local/bin/xray
+        chmod +x /usr/local/bin/xray
+        rm -rf "$tmpdir"
         msg "Xray v26.1.23 installed"
     else
-        current=$(xray version 2>/dev/null | head -1 | awk '{print $2}')
-        if [[ "$current" != "26.1.23" ]]; then
-            info "Upgrading Xray from $current to v26.1.23..."
-            bash <(curl -fsSL https://raw.githubusercontent.com/XTLS/Xray-install/main/install-release.sh) --version v26.1.23 2>&1
-            msg "Xray upgraded to v26.1.23"
-        else
-            msg "Xray v26.1.23 already installed"
-        fi
+        msg "Xray v26.1.23 already installed"
     fi
 
     setcap cap_net_bind_service=+ep /usr/local/bin/xray 2>/dev/null || true
