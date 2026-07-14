@@ -1178,8 +1178,8 @@ xray_install() {
 
     apt-get install -y -qq unzip 2>/dev/null || true
 
-    if ! command -v xray &>/dev/null || [[ "$(xray version 2>/dev/null | head -1 | awk '{print $2}')" != "26.1.23" ]]; then
-        info "Downloading Xray-core v26.1.23..."
+    if ! command -v xray &>/dev/null || [[ "$(xray version 2>/dev/null | head -1 | awk '{print $2}')" != "25.12.8" ]]; then
+        info "Downloading Xray-core v25.12.8..."
         local arch
         arch=$(uname -m)
         case "$arch" in
@@ -1189,14 +1189,14 @@ xray_install() {
         esac
         local tmpdir
         tmpdir=$(mktemp -d)
-        curl -fsSL "https://github.com/XTLS/Xray-core/releases/download/v26.1.23/Xray-linux-${arch}.zip" -o "$tmpdir/xray.zip"
+        curl -fsSL "https://github.com/XTLS/Xray-core/releases/download/v25.12.8/Xray-linux-${arch}.zip" -o "$tmpdir/xray.zip"
         unzip -qo "$tmpdir/xray.zip" -d "$tmpdir" xray
         cp "$tmpdir/xray" /usr/local/bin/xray
         chmod +x /usr/local/bin/xray
         rm -rf "$tmpdir"
-        msg "Xray v26.1.23 installed"
+        msg "Xray v25.12.8 installed"
     else
-        msg "Xray v26.1.23 already installed"
+        msg "Xray v25.12.8 already installed"
     fi
 
     setcap cap_net_bind_service=+ep /usr/local/bin/xray 2>/dev/null || true
