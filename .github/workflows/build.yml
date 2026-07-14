@@ -47,10 +47,7 @@ jobs:
 
       - name: Show build log
         if: failure()
-        run: |
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          head -200 build.log >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+        run: head -200 build.log
 
       - name: Upload build log
         if: always()
