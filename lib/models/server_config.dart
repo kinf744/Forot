@@ -34,7 +34,7 @@ class ServerConfig {
     this.zivpnPassword = '',
     this.zivpnObfs = 'hu``hqb`c',
   })  : sni = (sni == null || sni.isEmpty) ? address : sni,
-        host = (host == null || host.isEmpty) ? (sni == null || sni.isEmpty ? address : sni) : host;
+        host = (host == null || host.isEmpty) ? address : host;
 
   factory ServerConfig.fromJson(Map<String, dynamic> json) {
     final mode = json['mode'] ?? 'xray';

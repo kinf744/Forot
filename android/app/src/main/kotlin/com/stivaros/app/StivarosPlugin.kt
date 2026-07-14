@@ -188,7 +188,7 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 params["transport"] = call.argument<String>("transport") ?: "xhttp"
                 params["tls"] = call.argument<Boolean>("tls") ?: true
                 params["sni"] = call.argument<String>("sni") ?: (params["address"] as? String ?: "")
-                params["host"] = call.argument<String>("host") ?: (params["sni"] as? String ?: "")
+                params["host"] = call.argument<String>("host") ?: (params["address"] as? String ?: "")
                 params["publicKey"] = call.argument<String>("publicKey") ?: ""
                 params["shortId"] = call.argument<String>("shortId") ?: ""
                 params["flow"] = call.argument<String>("flow") ?: ""
