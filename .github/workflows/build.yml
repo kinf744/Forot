@@ -40,7 +40,14 @@ jobs:
           echo "libxray.so: $(ls -lh android/app/src/main/jniLibs/armeabi-v7a/libxray.so)"
 
       - name: Build APK
-        run: flutter build apk --release 2>&1
+        run: flutter build apk --release 2>&1 | tee build.log
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
