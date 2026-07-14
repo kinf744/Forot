@@ -204,7 +204,9 @@ class APIHandler(BaseHTTPRequestHandler):
                 return self._send({"activated": False, "message": "Missing device_id"}, 400)
             user = self._get_user_by_uuid(device_id)
             if not user:
+                conn = get_db()
                 user = conn.execute("SELECT * FROM users WHERE phone = ?", (device_id,)).fetchone()
+                conn.close()
             if user and user["active"]:
                 exp = user["expires_at"]
                 if exp and datetime.fromisoformat(exp) < datetime.now():
