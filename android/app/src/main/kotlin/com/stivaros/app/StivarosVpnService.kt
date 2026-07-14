@@ -42,6 +42,8 @@ class StivarosVpnService : VpnService() {
         createNotificationChannel()
         xrayManager = XrayManager(this)
         NativeLogger.i("VpnService", "onCreate: xrayManager created")
+        HevTun2Socks.init()
+        NativeLogger.i("VpnService", "HevTun2Socks available=${HevTun2Socks.isAvailable}")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -145,18 +147,23 @@ class StivarosVpnService : VpnService() {
     }
 
     private fun startSocksRelay(fd: Int, socksPort: Int) {
-        serviceScope.launch(Dispatchers.IO) {
-            try {
-                NativeLogger.i("VpnService", "startSocksRelay: fd=$fd socksPort=$socksPort")
-                val relay = Tun2SocksRelay(
-                    ParcelFileDescriptor.fromFd(fd),
-                    "127.0.0.1", socksPort
-                )
-                relay.start()
-                NativeLogger.i("VpnService", "SOCKS relay thread started")
-            } catch (e: Exception) {
-                NativeLogger.e("VpnService", "Socks relay error: ${e.message}")
-                Log.e(TAG, "Socks relay error: ${e.message}")
+        if (HevTun2Socks.isAvailable) {
+            NativeLogger.i("VpnService", "Starting HevTun2Socks fd=$fd port=$socksPort")
+            HevTun2Socks.start(this, fd, socksPort)
+            NativeLogger.i("VpnService", "HevTun2Socks started")
+        } else {
+            NativeLogger.w("VpnService", "HevTun2Socks not available, fallback to legacy relay")
+            serviceScope.launch(Dispatchers.IO) {
+                try {
+                    val relay = Tun2SocksRelay(
+                        ParcelFileDescriptor.fromFd(fd),
+                        "127.0.0.1", socksPort
+                    )
+                    relay.start()
+                    NativeLogger.i("VpnService", "Legacy SOCKS relay started")
+                } catch (e: Exception) {
+                    NativeLogger.e("VpnService", "Legacy relay error: ${e.message}")
+                }
             }
         }
     }
@@ -164,6 +171,7 @@ class StivarosVpnService : VpnService() {
     fun stopVpn() {
         NativeLogger.i("VpnService", "stopVpn()")
         xrayManager?.stop()
+        HevTun2Socks.stop()
         try { vpnInterface?.close(); NativeLogger.i("VpnService", "VPN interface closed") } catch (_: Exception) {}
         vpnInterface = null
         try { stopForeground(STOP_FOREGROUND_REMOVE) } catch (_: Exception) {}
