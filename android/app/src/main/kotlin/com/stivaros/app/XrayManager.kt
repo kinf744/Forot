@@ -207,6 +207,7 @@ class XrayManager(private val context: Context) {
             sb.appendLine("""      "security": "tls",""")
             sb.appendLine("""      "tlsSettings": {""")
             sb.appendLine("""        "serverName": "$sni",""")
+            sb.appendLine("""        "allowInsecure": true,""")
             sb.appendLine("""        "fingerprint": "chrome"""")
             sb.appendLine("""      }""")
         } else {
