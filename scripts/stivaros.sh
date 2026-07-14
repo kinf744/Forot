@@ -678,6 +678,11 @@ EOF
         zivpn_update_config_passwords 2>/dev/null || true
     fi
 
+    # Sync Xray server config with all active UUIDs
+    if [[ -f /etc/xray/config.json ]]; then
+        xray_sync_uuids
+    fi
+
     echo
     echo -e "${GREEN}══════════════════════════════════════${NC}"
     echo "  ✅ Customer created!"
@@ -798,6 +803,9 @@ delete_users() {
     if [[ $deleted -gt 0 ]]; then
         systemctl restart stivaros-api 2>/dev/null || true
         msg "API service restarted"
+        if [[ -f /etc/xray/config.json ]]; then
+            xray_sync_uuids
+        fi
     fi
     pause
 }
@@ -1315,6 +1323,11 @@ EOF
     systemctl enable xray
     systemctl restart xray
 
+    # Sync all user UUIDs from DB into Xray config
+    if [[ -f "$DB_PATH" ]]; then
+        xray_sync_uuids
+    fi
+
     echo
     echo -e "${GREEN}══════════════════════════════════════${NC}"
     echo -e "${GREEN}  Xray installed on port 443${NC}"
@@ -1342,6 +1355,40 @@ xray_uninstall() {
     rm -f /usr/local/bin/xray
     msg "Xray removed"
     pause
+}
+
+xray_sync_uuids() {
+    DB_PATH="$DB_PATH" XRAY_UUID_DEFAULT="$XRAY_UUID_DEFAULT" python3 << 'PYXRAY' 2>/dev/null || true
+import json, sqlite3, os
+
+db_path = os.environ.get('DB_PATH', '/opt/stivaros/stivaros.db')
+default_uuid = os.environ.get('XRAY_UUID_DEFAULT', 'cfe75234-b0d9-477d-b30f-9d24654b2487')
+
+uuids = []
+try:
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT DISTINCT v.xray_uuid FROM vpn_configs v
+        JOIN users u ON v.user_id = u.id
+        WHERE u.active = 1 AND (u.expires_at IS NULL OR u.expires_at >= DATE('now'))
+    """)
+    uuids = [row[0] for row in cur.fetchall() if row[0]]
+    conn.close()
+except Exception:
+    pass
+
+if default_uuid not in uuids:
+    uuids.insert(0, default_uuid)
+
+with open('/etc/xray/config.json') as f:
+    config = json.load(f)
+config['inbounds'][0]['settings']['clients'] = [{'id': uid} for uid in uuids]
+with open('/etc/xray/config.json', 'w') as f:
+    json.dump(config, f, indent=2)
+PYXRAY
+    systemctl restart xray
+    msg "Xray config synced with $(sqlite3 "$DB_PATH" "SELECT COUNT(DISTINCT xray_uuid) FROM vpn_configs" 2>/dev/null || echo 0)+1 UUIDs"
 }
 
 xray_tunnel_menu() {
