@@ -27,6 +27,7 @@ class XrayManager(private val context: Context) {
     fun getSocksPort(): Int = socksPort
     fun isRunning(): Boolean = running
 
+    @Synchronized
     fun start(
         serverAddress: String,
         serverPort: Int,
@@ -46,9 +47,23 @@ class XrayManager(private val context: Context) {
 
         NativeLogger.i("XrayManager", "start: address=$serverAddress port=$serverPort uuid=$uuid transport=$transport sni=$sni host=$host socksPort=$socksPort")
         NativeLogger.i("XrayManager", "Writing Xray config...")
+
+        // Resolve server address to IP to avoid DNS loop through the tunnel
+        var serverIp = ""
+        if (!serverAddress.matches(Regex("^\\d+\\.\\d+\\.\\d+\\.\\d+$"))) {
+            try {
+                val resolved = java.net.InetAddress.getByName(serverAddress).hostAddress
+                if (resolved != null && resolved != serverAddress) {
+                    serverIp = resolved
+                    NativeLogger.i("XrayManager", "Resolved $serverAddress -> $serverIp")
+                }
+            } catch (e: Exception) {
+                NativeLogger.w("XrayManager", "DNS resolve failed for $serverAddress: ${e.message}")
+            }
+        }
         val configFile = writeXrayConfig(
             serverAddress, serverPort, uuid, protocol,
-            transport, tls, sni, host, publicKey, shortId, flow
+            transport, tls, sni, host, publicKey, shortId, flow, serverIp
         )
         NativeLogger.i("XrayManager", "Config written to: ${configFile.absolutePath}")
 
@@ -88,11 +103,12 @@ class XrayManager(private val context: Context) {
         address: String, port: Int, uuid: String,
         protocol: String, transport: String,
         tls: Boolean, sni: String, host: String,
-        publicKey: String, shortId: String, flow: String
+        publicKey: String, shortId: String, flow: String,
+        serverIp: String = ""
     ): File {
         val sb = StringBuilder()
         sb.appendLine("{")
-        sb.appendLine("""  "log": { "loglevel": "debug" },""")
+        sb.appendLine("""  "log": { "loglevel": "warning" },""")
         sb.appendLine("""  "inbounds": [{""")
         sb.appendLine("""    "port": $socksPort,""")
         sb.appendLine("""    "listen": "127.0.0.1",""")
@@ -106,12 +122,15 @@ class XrayManager(private val context: Context) {
             "vless" -> {
                 sb.appendLine("""    "settings": {""")
                 sb.appendLine("""      "vnext": [{""")
-                sb.appendLine("""        "address": "$address",""")
+                sb.appendLine("""        "address": "${if (serverIp.isNotEmpty()) serverIp else address}",""")
                 sb.appendLine("""        "port": $port,""")
                 sb.appendLine("""        "users": [{""")
                 sb.appendLine("""          "id": "$uuid",""")
-                sb.appendLine("""          "encryption": "none",""")
-                sb.appendLine("""          "flow": "$flow"""")
+                sb.appendLine("""          "encryption": "none"""")
+
+                if (flow.isNotBlank()) {
+                    sb.appendLine("""          ,"flow": "$flow"""")
+                }
                 sb.appendLine("""        }]""")
                 sb.appendLine("""      }]""")
                 sb.appendLine("""    },""")
@@ -119,7 +138,7 @@ class XrayManager(private val context: Context) {
             "vmess" -> {
                 sb.appendLine("""    "settings": {""")
                 sb.appendLine("""      "vnext": [{""")
-                sb.appendLine("""        "address": "$address",""")
+                sb.appendLine("""        "address": "${if (serverIp.isNotEmpty()) serverIp else address}",""")
                 sb.appendLine("""        "port": $port,""")
                 sb.appendLine("""        "users": [{""")
                 sb.appendLine("""          "id": "$uuid",""")
@@ -132,7 +151,7 @@ class XrayManager(private val context: Context) {
             "trojan" -> {
                 sb.appendLine("""    "settings": {""")
                 sb.appendLine("""      "servers": [{""")
-                sb.appendLine("""        "address": "$address",""")
+                sb.appendLine("""        "address": "${if (serverIp.isNotEmpty()) serverIp else address}",""")
                 sb.appendLine("""        "port": $port,""")
                 sb.appendLine("""        "password": "$uuid"""")
                 sb.appendLine("""      }]""")
@@ -199,7 +218,7 @@ class XrayManager(private val context: Context) {
         sb.appendLine("""    },""")
         sb.appendLine("""    "mux": { "enabled": true, "concurrency": 8 }""")
         sb.appendLine("""  }],""")
-        sb.appendLine("""  "routing": { "rules": [] }""")
+        sb.appendLine("""  "routing": { "domainStrategy": "AsIs", "rules": [] }""")
         sb.appendLine("}")
 
         val file = File(context.filesDir, "xray_config.json")
@@ -243,7 +262,7 @@ class XrayManager(private val context: Context) {
             conn.connectTimeout = 30000
             conn.readTimeout = 300000
             conn.setRequestProperty("User-Agent", "Stivaros/1.0")
-            NativeLogger.i("XrayManager", "Connected to GitHub CDN, reading zip...")
+            NativeLogger.i("XrayManager", "Connected to GitHub CDN, reading zip for arm32-v7a...")
             conn.inputStream.use { zipInput ->
                 val zipBytes = zipInput.readBytes()
                 NativeLogger.i("XrayManager", "Downloaded ${zipBytes.size} bytes")

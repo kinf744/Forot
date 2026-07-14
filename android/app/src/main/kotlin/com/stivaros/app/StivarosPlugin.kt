@@ -9,6 +9,8 @@ import android.content.IntentFilter
 import android.net.TrafficStats
 import android.os.Build
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -27,24 +29,56 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private lateinit var context: Context
     private var xrayManager: XrayManager? = null
     private var activityBinding: ActivityPluginBinding? = null
-    private var pendingConnectParams: Map<String, Any?>? = null
+
+    private var statusEventSink: EventChannel.EventSink? = null
+    private var statusReceiver: BroadcastReceiver? = null
 
     companion object {
+        @Volatile
+        private var pendingConnectParams: Map<String, Any?>? = null
+
         @JvmStatic
         fun consumePendingParams(): Map<String, Any?>? {
-            val plugin = instance ?: return null
-            val params = plugin.pendingConnectParams
-            plugin.pendingConnectParams = null
+            val params = pendingConnectParams
+            pendingConnectParams = null
             return params
         }
 
         @JvmStatic
         fun startPendingVpn(params: Map<String, Any?>) {
-            instance?.startVpnService(params)
+            val plugin = instance ?: run {
+                NativeLogger.e("StivarosPlugin", "startPendingVpn: instance is null!")
+                return
+            }
+            plugin.startVpnService(params)
         }
 
+        @Volatile
         private var instance: StivarosPlugin? = null
+
+        @JvmStatic
+        fun sendStatusEvent(status: String, message: String = "") {
+            NativeLogger.i("StivarosPlugin", "sendStatusEvent: $status $message to ${instance?.statusEventSink}")
+            val sink = instance?.statusEventSink
+            if (sink != null) {
+                Handler(Looper.getMainLooper()).post {
+                    try {
+                        sink.success(mapOf("status" to status, "message" to message))
+                        NativeLogger.i("StivarosPlugin", "sendStatusEvent: success")
+                    } catch (e: Exception) {
+                        NativeLogger.e("StivarosPlugin", "sendStatusEvent error: ${e.message}")
+                    }
+                }
+            } else {
+                NativeLogger.w("StivarosPlugin", "sendStatusEvent: no EventSink, caching status")
+                instance?.cachedStatus = status
+                instance?.cachedMessage = message
+            }
+        }
     }
+
+    private var cachedStatus: String = "DISCONNECTED"
+    private var cachedMessage: String = ""
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         instance = this
@@ -54,32 +88,52 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         channel.setMethodCallHandler(this)
         statusEventChannel = EventChannel(binding.binaryMessenger, "com.stivaros.app/vpnStatus")
         statusEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            private var receiver: BroadcastReceiver? = null
 
             override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
+                NativeLogger.i("StivarosPlugin", "statusEventChannel onListen called")
+                statusEventSink = events
                 val filter = IntentFilter(StivarosVpnService.BROADCAST_STATUS)
-                receiver = object : BroadcastReceiver() {
+                if (statusReceiver != null) {
+                    try { context.unregisterReceiver(statusReceiver) } catch (_: Exception) {}
+                }
+                statusReceiver = object : BroadcastReceiver() {
                     override fun onReceive(ctx: Context, intent: Intent) {
                         val status = intent.getStringExtra(StivarosVpnService.EXTRA_STATUS) ?: "DISCONNECTED"
                         val message = intent.getStringExtra(StivarosVpnService.EXTRA_MESSAGE) ?: ""
-                        events.success(mapOf("status" to status, "message" to message))
+                        NativeLogger.i("StivarosPlugin", "status broadcast received: $status $message")
+                        sendStatusEvent(status, message)
                     }
                 }
-                context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                context.registerReceiver(statusReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                NativeLogger.i("StivarosPlugin", "BroadcastReceiver registered")
+
+                val vpnStatus = StivarosVpnService.currentStatus
+                if (cachedStatus != "DISCONNECTED" || cachedMessage != "") {
+                    NativeLogger.i("StivarosPlugin", "Resending cached status: $cachedStatus $cachedMessage")
+                    sendStatusEvent(cachedStatus, cachedMessage)
+                } else if (vpnStatus != "DISCONNECTED") {
+                    NativeLogger.i("StivarosPlugin", "Resending VpnService.currentStatus: $vpnStatus")
+                    sendStatusEvent(vpnStatus, "")
+                }
             }
 
             override fun onCancel(arguments: Any?) {
-                receiver?.let { context.unregisterReceiver(it) }
-                receiver = null
+                NativeLogger.i("StivarosPlugin", "statusEventChannel onCancel called")
+                statusEventSink = null
             }
         })
         xrayManager = XrayManager(context)
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        NativeLogger.i("StivarosPlugin", "onDetachedFromEngine")
         channel.setMethodCallHandler(null)
         statusEventChannel.setStreamHandler(null)
-        xrayManager?.stop()
+        statusEventSink = null
+        if (statusReceiver != null) {
+            try { context.unregisterReceiver(statusReceiver) } catch (_: Exception) {}
+            statusReceiver = null
+        }
         instance = null
     }
 
@@ -103,6 +157,7 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         NativeLogger.i("Plugin", "Starting StivarosVpnService with params")
         val serviceIntent = Intent(context, StivarosVpnService::class.java).apply {
             action = StivarosVpnService.ACTION_START
+            putExtra("mode", params["mode"] as? String ?: "xray")
             putExtra("address", params["address"] as? String ?: "")
             putExtra("port", (params["port"] as? Int) ?: 443)
             putExtra("uuid", params["uuid"] as? String ?: "")
@@ -114,6 +169,9 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             putExtra("publicKey", params["publicKey"] as? String ?: "")
             putExtra("shortId", params["shortId"] as? String ?: "")
             putExtra("flow", params["flow"] as? String ?: "")
+            putExtra("zivpnPort", params["zivpnPort"] as? String ?: "")
+            putExtra("zivpnPassword", params["zivpnPassword"] as? String ?: "")
+            putExtra("zivpnObfs", params["zivpnObfs"] as? String ?: "")
         }
         context.startForegroundService(serviceIntent)
     }
@@ -122,6 +180,7 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         when (call.method) {
             "connect" -> {
                 val params = mutableMapOf<String, Any?>()
+                params["mode"] = call.argument<String>("mode") ?: "xray"
                 params["address"] = call.argument<String>("address") ?: ""
                 params["port"] = call.argument<Int>("port") ?: 443
                 params["uuid"] = call.argument<String>("uuid") ?: ""
@@ -129,22 +188,27 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 params["transport"] = call.argument<String>("transport") ?: "xhttp"
                 params["tls"] = call.argument<Boolean>("tls") ?: true
                 params["sni"] = call.argument<String>("sni") ?: (params["address"] as? String ?: "")
-                params["host"] = call.argument<String>("host") ?: (params["sni"] as? String ?: "")
+                params["host"] = call.argument<String>("host") ?: (params["address"] as? String ?: "")
                 params["publicKey"] = call.argument<String>("publicKey") ?: ""
                 params["shortId"] = call.argument<String>("shortId") ?: ""
                 params["flow"] = call.argument<String>("flow") ?: ""
+                params["zivpnPort"] = call.argument<String>("zivpnPort") ?: ""
+                params["zivpnPassword"] = call.argument<String>("zivpnPassword") ?: ""
+                params["zivpnObfs"] = call.argument<String>("zivpnObfs") ?: ""
 
-                NativeLogger.i("Plugin", "connect called: address=${params["address"]} port=${params["port"]} uuid=${params["uuid"]}")
+                NativeLogger.i("Plugin", "connect called: mode=${params["mode"]} address=${params["address"]} uuid=${params["uuid"]}")
 
                 // Check VPN permission
                 val vpnIntent = android.net.VpnService.prepare(context)
                 if (vpnIntent != null) {
-                    // Permission not granted — store params and show dialog
+                    // Permission not granted — store params (in companion object) and show dialog
                     NativeLogger.w("Plugin", "VPN permission not granted, storing pending params")
                     pendingConnectParams = params
                     val activity = activityBinding?.activity
                     if (activity != null) {
                         activity.startActivityForResult(vpnIntent, StivarosVpnService.VPN_REQUEST_CODE)
+                    } else {
+                        NativeLogger.e("Plugin", "No activity for VPN permission request")
                     }
                     result.success(false)
                     return@onMethodCall
@@ -152,7 +216,6 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
                 // Permission already granted
                 NativeLogger.i("Plugin", "VPN permission OK, starting service")
-                pendingConnectParams = null
                 startVpnService(params)
                 result.success(true)
             }
@@ -163,9 +226,9 @@ class StivarosPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 result.success(true)
             }
             "getStatus" -> {
-                val status = StivarosVpnService.currentStatus
-                NativeLogger.i("Plugin", "getStatus: $status")
-                result.success(status)
+                val status = cachedStatus
+                NativeLogger.i("Plugin", "getStatus: $status (msg: $cachedMessage)")
+                result.success(mapOf("status" to status, "message" to cachedMessage))
             }
             "requestVpnPermission" -> {
                 val activity = activityBinding?.activity
