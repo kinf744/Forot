@@ -1035,7 +1035,9 @@ zivpn_install() {
 
     mkdir -p /etc/zivpn
     local DOMAIN
-    read -p "Domain: " DOMAIN; DOMAIN=${DOMAIN:-"zivpn.local"}
+    while [[ -z "$DOMAIN" ]]; do
+        read -p "Domain for ZIVPN certificate (e.g. vps.example.com): " DOMAIN
+    done
     echo "$DOMAIN" > "$ZIVPN_DOMAIN_FILE"
 
     local CERT="/etc/zivpn/zivpn.crt" KEY="/etc/zivpn/zivpn.key"
@@ -1204,21 +1206,35 @@ xray_install() {
     mkdir -p /etc/xray
 
     local XRAY_DOMAIN
-    read -p "Domain for Xray (e.g. vps.example.com) [kiaje2.kingom.ggff.net]: " XRAY_DOMAIN
-    XRAY_DOMAIN=${XRAY_DOMAIN:-"kiaje2.kingom.ggff.net"}
+    while [[ -z "$XRAY_DOMAIN" ]]; do
+        read -p "Domain for Xray (e.g. vps.example.com): " XRAY_DOMAIN
+    done
 
-    # Use existing LE cert from acme.sh if available, else generate self-signed
-    if [[ -f /root/.acme.sh/$XRAY_DOMAIN\_ecc/fullchain.cer ]]; then
-        info "Using Let's Encrypt cert from acme.sh..."
-        cp /root/.acme.sh/$XRAY_DOMAIN\_ecc/fullchain.cer /etc/xray/xray.crt
-        cp /root/.acme.sh/$XRAY_DOMAIN\_ecc/$XRAY_DOMAIN.key /etc/xray/xray.key
+    local ACME_EMAIL="adrienkiaje@gmail.com"
+    if ! command -v acme.sh &>/dev/null; then
+        info "Installing acme.sh for Let's Encrypt..."
+        curl -fsSL https://get.acme.sh | sh -s email="$ACME_EMAIL" 2>&1
+    fi
+    export LE_WORKING_DIR="/root/.acme.sh"
+    if [[ -f /root/.acme.sh/${XRAY_DOMAIN}_ecc/fullchain.cer ]]; then
+        info "Using existing Let's Encrypt cert from acme.sh..."
+        cp /root/.acme.sh/${XRAY_DOMAIN}_ecc/fullchain.cer /etc/xray/xray.crt
+        cp /root/.acme.sh/${XRAY_DOMAIN}_ecc/${XRAY_DOMAIN}.key /etc/xray/xray.key
         msg "Let's Encrypt certificate copied"
-    elif [[ ! -f /etc/xray/xray.key ]]; then
-        info "Generating self-signed TLS certificate for $XRAY_DOMAIN..."
-        openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
-            -keyout /etc/xray/xray.key -out /etc/xray/xray.crt \
-            -subj "/CN=$XRAY_DOMAIN" -days 36500 2>/dev/null
-        msg "Self-signed TLS certificate generated"
+    else
+        info "Issuing Let's Encrypt certificate for $XRAY_DOMAIN..."
+        ~/.acme.sh/acme.sh --issue --standalone -d "$XRAY_DOMAIN" --keylength ec-256 \
+            --server letsencrypt --accountemail "$ACME_EMAIL" 2>&1
+        if [[ -f /root/.acme.sh/${XRAY_DOMAIN}_ecc/fullchain.cer ]]; then
+            cp /root/.acme.sh/${XRAY_DOMAIN}_ecc/fullchain.cer /etc/xray/xray.crt
+            cp /root/.acme.sh/${XRAY_DOMAIN}_ecc/${XRAY_DOMAIN}.key /etc/xray/xray.key
+            msg "Let's Encrypt certificate issued"
+        else
+            warn "Let's Encrypt failed, using self-signed certificate"
+            openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
+                -keyout /etc/xray/xray.key -out /etc/xray/xray.crt \
+                -subj "/CN=$XRAY_DOMAIN" -days 36500 2>/dev/null
+        fi
     fi
 
     # Save domain for client configs
