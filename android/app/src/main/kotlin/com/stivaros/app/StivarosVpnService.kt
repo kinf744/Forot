@@ -162,23 +162,18 @@ class StivarosVpnService : VpnService() {
     }
 
     private fun startSocksRelay(fd: Int, socksPort: Int) {
-        if (HevTun2Socks.isAvailable) {
-            NativeLogger.i("VpnService", "Starting HevTun2Socks fd=$fd port=$socksPort")
-            HevTun2Socks.start(this, fd, socksPort)
-            NativeLogger.i("VpnService", "HevTun2Socks started")
-        } else {
-            NativeLogger.w("VpnService", "HevTun2Socks not available, fallback to legacy relay")
-            serviceScope.launch(Dispatchers.IO) {
-                try {
-                    val relay = Tun2SocksRelay(
-                        ParcelFileDescriptor.fromFd(fd),
-                        "127.0.0.1", socksPort
-                    )
-                    relay.start()
-                    NativeLogger.i("VpnService", "Legacy SOCKS relay started")
-                } catch (e: Exception) {
-                    NativeLogger.e("VpnService", "Legacy relay error: ${e.message}")
-                }
+        NativeLogger.i("VpnService", "startSocksRelay: fd=$fd socksPort=$socksPort")
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                val relay = Tun2SocksRelay(
+                    ParcelFileDescriptor.fromFd(fd),
+                    "127.0.0.1", socksPort
+                )
+                relay.start()
+                NativeLogger.i("VpnService", "SOCKS relay thread started")
+            } catch (e: Exception) {
+                NativeLogger.e("VpnService", "Socks relay error: ${e.message}")
+                Log.e(TAG, "Socks relay error: ${e.message}")
             }
         }
     }
