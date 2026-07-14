@@ -6,10 +6,15 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.VpnService
 import android.os.Build
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
@@ -22,10 +27,13 @@ class StivarosVpnService : VpnService() {
         const val CHANNEL_ID = "stivaros_vpn"
         const val ACTION_START = "com.stivaros.app.START"
         const val ACTION_STOP = "com.stivaros.app.STOP"
+        const val ACTION_RECONNECT = "com.stivaros.app.RECONNECT"
         const val VPN_REQUEST_CODE = 1000
         const val BROADCAST_STATUS = "com.stivaros.app.STATUS"
         const val EXTRA_STATUS = "status"
         const val EXTRA_MESSAGE = "message"
+        const val MAX_RECONNECT = 20
+        const val RECONNECT_DELAY = 3000L
 
         var instance: StivarosVpnService? = null
         var currentStatus = "DISCONNECTED"
@@ -37,6 +45,13 @@ class StivarosVpnService : VpnService() {
     private var serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
     private var xrayManager: XrayManager? = null
     private var zivpnManager: ZivpnManager? = null
+    private var isStartingVpn = false
+    private var userRequestedStop = false
+    private var reconnectAttempts = 0
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var connectivityManager: ConnectivityManager? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var pendingIntent: Intent? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -44,37 +59,62 @@ class StivarosVpnService : VpnService() {
         createNotificationChannel()
         xrayManager = XrayManager(this)
         zivpnManager = ZivpnManager(this)
+        registerNetworkCallback()
         NativeLogger.i("VpnService", "onCreate: managers created")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         NativeLogger.i("VpnService", "onStartCommand: action=${intent?.action}")
+        if (intent?.action == ACTION_START && intent.extras != null) {
+            pendingIntent = intent
+        }
         startForeground(NOTIFICATION_ID, buildNotification("Starting..."))
         when (intent?.action) {
             ACTION_START -> startVpn(intent)
-            ACTION_STOP -> stopVpn()
+            ACTION_STOP -> { userRequestedStop = true; stopVpn() }
+            ACTION_RECONNECT -> reconnect()
         }
-        return START_STICKY
+        return if (userRequestedStop) START_NOT_STICKY else START_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = super.onBind(intent)
 
     override fun onRevoke() {
         NativeLogger.w("VpnService", "VPN revoked by system")
-        stopVpn()
+        try { vpnInterface?.close() } catch (_: Exception) {}
+        vpnInterface = null
+        if (!userRequestedStop) {
+            serviceScope.launch {
+                isStartingVpn = false
+                delay(300)
+                startVpn(pendingIntent)
+            }
+        }
     }
 
     override fun onDestroy() {
         NativeLogger.i("VpnService", "onDestroy")
+        unregisterNetworkCallback()
         stopVpn()
         serviceJob.cancel()
         instance = null
         super.onDestroy()
     }
 
-    private fun startVpn(intent: Intent) {
+    private fun startVpn(intent: Intent?) {
+        if (isStartingVpn) return
+        isStartingVpn = true
+        userRequestedStop = false
+
+        if (wakeLock == null || wakeLock?.isHeld == false) {
+            val pm = getSystemService(POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "StivarosVPN::WakeLock")
+            wakeLock?.acquire(8 * 60 * 60 * 1000L)
+        }
+
         serviceScope.launch {
             try {
+                if (intent == null) { isStartingVpn = false; return@launch }
                 val mode = intent.getStringExtra("mode") ?: "xray"
                 val serverAddress = intent.getStringExtra("address") ?: return@launch
                 val uuid = intent.getStringExtra("uuid") ?: return@launch
@@ -91,6 +131,7 @@ class StivarosVpnService : VpnService() {
                     zivpnManager?.errorCallback = { msg ->
                         NativeLogger.e("VpnService", "Zivpn error callback: $msg")
                         updateStatus("ERROR", msg)
+                        if (!userRequestedStop) triggerReconnect()
                     }
 
                     zivpnManager?.start(serverAddress, zivpnPort, zivpnPassword, zivpnObfs)
@@ -111,6 +152,7 @@ class StivarosVpnService : VpnService() {
                     xrayManager?.errorCallback = { msg ->
                         NativeLogger.e("VpnService", "Xray error callback: $msg")
                         updateStatus("ERROR", msg)
+                        if (!userRequestedStop) triggerReconnect()
                     }
 
                     xrayManager?.start(
@@ -152,12 +194,14 @@ class StivarosVpnService : VpnService() {
                 HevTun2Socks.init()
                 if (HevTun2Socks.isAvailable) {
                     HevTun2Socks.start(this@StivarosVpnService, fd.fd, socksPort, 1400)
+                    reconnectAttempts = 0
                     updateStatus("CONNECTED", "Connected")
                     updateNotification("Connected")
                     NativeLogger.i("VpnService", "VPN fully connected via HevTun2Socks!")
                 } else {
                     NativeLogger.e("VpnService", "HevTun2Socks not available, falling back to Kotlin relay")
                     startSocksRelay(fd.fd, socksPort)
+                    reconnectAttempts = 0
                     updateStatus("CONNECTED", "Connected")
                     updateNotification("Connected")
                     NativeLogger.i("VpnService", "VPN fully connected via Kotlin relay!")
@@ -167,8 +211,16 @@ class StivarosVpnService : VpnService() {
                 NativeLogger.e("VpnService", "VPN start error: ${e.message}")
                 Log.e(TAG, "VPN start error: ${e.message}")
                 updateStatus("ERROR", e.message ?: "Connection failed")
-                stopVpn()
+                if (!userRequestedStop && reconnectAttempts < MAX_RECONNECT) {
+                    isStartingVpn = false
+                    reconnectAttempts++
+                    delay(RECONNECT_DELAY)
+                    startVpn(pendingIntent)
+                } else {
+                    stopVpn()
+                }
             }
+            isStartingVpn = false
         }
     }
 
@@ -192,6 +244,7 @@ class StivarosVpnService : VpnService() {
 
     fun stopVpn() {
         NativeLogger.i("VpnService", "stopVpn()")
+        isStartingVpn = false
         xrayManager?.stop()
         zivpnManager?.stop()
         HevTun2Socks.stop()
@@ -199,8 +252,80 @@ class StivarosVpnService : VpnService() {
         vpnInterface = null
         try { relayPfd?.close(); NativeLogger.i("VpnService", "Relay PFD closed") } catch (_: Exception) {}
         relayPfd = null
+        try { if (wakeLock?.isHeld == true) wakeLock?.release() } catch (_: Exception) {}
+        wakeLock = null
+        reconnectAttempts = 0
         try { stopForeground(STOP_FOREGROUND_REMOVE) } catch (_: Exception) {}
         updateStatus("DISCONNECTED", "Disconnected")
+    }
+
+    private fun triggerReconnect() {
+        if (userRequestedStop) return
+        serviceScope.launch {
+            delay(2000)
+            if (!userRequestedStop && currentStatus != "CONNECTED") {
+                NativeLogger.i("VpnService", "triggerReconnect: network may be back, reconnecting...")
+                reconnect()
+            }
+        }
+    }
+
+    private fun reconnect() {
+        if (isStartingVpn || userRequestedStop) return
+        serviceScope.launch {
+            try {
+                xrayManager?.stop()
+                zivpnManager?.stop()
+                HevTun2Socks.stop()
+                try { vpnInterface?.close() } catch (_: Exception) {}
+                vpnInterface = null
+            } catch (_: Exception) {}
+            isStartingVpn = false
+            delay(1500)
+            startVpn(pendingIntent)
+        }
+    }
+
+    private fun registerNetworkCallback() {
+        try {
+            connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val request = NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+            networkCallback = object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) {
+                    NativeLogger.i("VpnService", "Network available -> checking state")
+                    if (!userRequestedStop) {
+                        serviceScope.launch {
+                            delay(1500)
+                            if (!userRequestedStop &&
+                                currentStatus != "CONNECTING" &&
+                                currentStatus != "CONNECTED") {
+                                NativeLogger.i("VpnService", "Network restored -> reconnecting")
+                                reconnect()
+                            }
+                        }
+                    }
+                }
+                override fun onLost(network: Network) {
+                    NativeLogger.i("VpnService", "Network lost")
+                    if (!userRequestedStop && currentStatus == "CONNECTED") {
+                        updateStatus("DISCONNECTED", "Network lost")
+                    }
+                }
+            }
+            connectivityManager?.registerNetworkCallback(request, networkCallback!!)
+        } catch (e: Exception) {
+            NativeLogger.e("VpnService", "registerNetworkCallback error: ${e.message}")
+        }
+    }
+
+    private fun unregisterNetworkCallback() {
+        try {
+            networkCallback?.let { connectivityManager?.unregisterNetworkCallback(it) }
+        } catch (_: Exception) {}
+        networkCallback = null
+        connectivityManager = null
     }
 
     private fun updateStatus(status: String, message: String = "") {
