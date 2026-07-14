@@ -608,7 +608,7 @@ create_user() {
     # Add zivpn columns if not exists (migration)
     sqlite3 "$DB_PATH" "ALTER TABLE vpn_configs ADD COLUMN zivpn_password TEXT DEFAULT '';" 2>/dev/null || true
     sqlite3 "$DB_PATH" "ALTER TABLE vpn_configs ADD COLUMN zivpn_port INTEGER DEFAULT 5667;" 2>/dev/null || true
-    sqlite3 "$DB_PATH" "ALTER TABLE vpn_configs ADD COLUMN zivpn_obfs TEXT DEFAULT 'hu``hqb`c';" 2>/dev/null || true
+    sqlite3 "$DB_PATH" "ALTER TABLE vpn_configs ADD COLUMN zivpn_obfs TEXT DEFAULT 'hu\`\`hqb\`c';" 2>/dev/null || true
 
     # Generate ZIVPN password for Camtel UDP
     zivpn_pass=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | fold -w 12 | head -1)
@@ -652,15 +652,15 @@ VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $server_port,
 
 -- Camtel UDP (ZIVPN) configs - tier 150
 INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, tier, xray_uuid, zivpn_password, zivpn_port, zivpn_obfs)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $ZIVPN_PORT, 'zivpn', 'udp', 0, '$server_addr', 'camtel', 'zivpn', '', '150', '$xray_uuid', '$zivpn_pass', $ZIVPN_PORT, 'hu``hqb`c');
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $ZIVPN_PORT, 'zivpn', 'udp', 0, '$server_addr', 'camtel', 'zivpn', '', '150', '$xray_uuid', '$zivpn_pass', $ZIVPN_PORT, 'hu\`\`hqb\`c');
 INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, tier, xray_uuid, zivpn_password, zivpn_port, zivpn_obfs)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $ZIVPN_PORT, 'zivpn', 'udp', 0, '$server_addr', '', 'zivpn', '', '150', '$xray_uuid', '$zivpn_pass', $ZIVPN_PORT, 'hu``hqb`c');
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $ZIVPN_PORT, 'zivpn', 'udp', 0, '$server_addr', '', 'zivpn', '', '150', '$xray_uuid', '$zivpn_pass', $ZIVPN_PORT, 'hu\`\`hqb\`c');
 
 -- Camtel UDP (ZIVPN) configs - tier 100
 INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, tier, xray_uuid, zivpn_password, zivpn_port, zivpn_obfs)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $ZIVPN_PORT, 'zivpn', 'udp', 0, '$server_addr', 'camtel', 'zivpn', '', '100', '$xray_uuid', '$zivpn_pass', $ZIVPN_PORT, 'hu``hqb`c');
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $ZIVPN_PORT, 'zivpn', 'udp', 0, '$server_addr', 'camtel', 'zivpn', '', '100', '$xray_uuid', '$zivpn_pass', $ZIVPN_PORT, 'hu\`\`hqb\`c');
 INSERT INTO vpn_configs (user_id, server_address, server_port, protocol, transport, tls, sni, isp, mode, flow, tier, xray_uuid, zivpn_password, zivpn_port, zivpn_obfs)
-VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $ZIVPN_PORT, 'zivpn', 'udp', 0, '$server_addr', '', 'zivpn', '', '100', '$xray_uuid', '$zivpn_pass', $ZIVPN_PORT, 'hu``hqb`c');
+VALUES ((SELECT id FROM users WHERE uuid='$uuid'), '$server_addr', $ZIVPN_PORT, 'zivpn', 'udp', 0, '$server_addr', '', 'zivpn', '', '100', '$xray_uuid', '$zivpn_pass', $ZIVPN_PORT, 'hu\`\`hqb\`c');
 EOF
 
     # Create ZIVPN system user for Camtel UDP tunnel
