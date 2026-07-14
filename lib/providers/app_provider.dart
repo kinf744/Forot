@@ -342,20 +342,24 @@ class AppProvider extends ChangeNotifier {
 
     final serverAddress = (_user!.serverAddress != null && _user!.serverAddress!.isNotEmpty)
         ? _user!.serverAddress!
-        : (_serverConfig?.address ?? '');
+        : (_serverConfig?.address ?? '105.18.12.135');
     final uuid = _user!.uuid;
+    // Use sni/host from API config if available, fallback to domain
+    final defaultSni = _serverConfig?.sni.isNotEmpty == true ? _serverConfig!.sni : 'kiaje2.kingom.ggff.net';
+    final defaultHost = _serverConfig?.host.isNotEmpty == true ? _serverConfig!.host : 'kiaje2.kingom.ggff.net';
+    final defaultAddress = _serverConfig?.address.isNotEmpty == true ? _serverConfig!.address : '104.18.12.135';
 
     // Build default local configs (MTN 150Mo, MTN 100Mo, Camtel UDP)
     final defaultConfigs = <Map<String, dynamic>>[
       {
         'label': 'MTN 150Mo',
-        'address': serverAddress,
+        'address': defaultAddress,
         'port': 443,
         'protocol': 'vless',
         'transport': 'xhttp',
         'tls': true,
-        'sni': 'mtnplay.com',
-        'host': serverAddress,
+        'sni': defaultSni,
+        'host': defaultHost,
         'public_key': '',
         'short_id': '',
         'flow': '',
@@ -365,13 +369,13 @@ class AppProvider extends ChangeNotifier {
       },
       {
         'label': 'MTN 100Mo',
-        'address': serverAddress,
+        'address': defaultAddress,
         'port': 443,
         'protocol': 'vless',
         'transport': 'xhttp',
         'tls': true,
-        'sni': serverAddress,
-        'host': serverAddress,
+        'sni': defaultSni,
+        'host': defaultHost,
         'public_key': '',
         'short_id': '',
         'flow': '',
@@ -381,13 +385,13 @@ class AppProvider extends ChangeNotifier {
       },
       {
         'label': 'Camtel UDP',
-        'address': serverAddress,
+        'address': defaultAddress,
         'port': 5667,
         'protocol': 'zivpn',
         'transport': 'udp',
         'tls': false,
-        'sni': serverAddress,
-        'host': serverAddress,
+        'sni': defaultSni,
+        'host': defaultHost,
         'public_key': '',
         'short_id': '',
         'flow': '',
