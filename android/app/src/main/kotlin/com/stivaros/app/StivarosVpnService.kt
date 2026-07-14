@@ -101,6 +101,7 @@ class StivarosVpnService : VpnService() {
         super.onDestroy()
     }
 
+    @Synchronized
     private fun startVpn(intent: Intent?) {
         if (isStartingVpn) return
         isStartingVpn = true

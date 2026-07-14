@@ -27,6 +27,7 @@ class XrayManager(private val context: Context) {
     fun getSocksPort(): Int = socksPort
     fun isRunning(): Boolean = running
 
+    @Synchronized
     fun start(
         serverAddress: String,
         serverPort: Int,
