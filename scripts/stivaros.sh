@@ -374,7 +374,7 @@ class APIHandler(BaseHTTPRequestHandler):
                     "transport": cfg["transport"],
                     "tls": bool(cfg["tls"]),
                     "sni": cfg["sni"],
-                    "host": cfg["sni"] or cfg["server_address"],
+                    "host": cfg["host"] or cfg["sni"] or cfg["server_address"],
                     "public_key": cfg["public_key"] or "",
                     "short_id": cfg["short_id"] or "",
                     "flow": cfg["flow"] or "",
