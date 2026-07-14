@@ -203,6 +203,8 @@ class APIHandler(BaseHTTPRequestHandler):
             if not device_id:
                 return self._send({"activated": False, "message": "Missing device_id"}, 400)
             user = self._get_user_by_uuid(device_id)
+            if not user:
+                user = conn.execute("SELECT * FROM users WHERE phone = ?", (device_id,)).fetchone()
             if user and user["active"]:
                 exp = user["expires_at"]
                 if exp and datetime.fromisoformat(exp) < datetime.now():
@@ -224,6 +226,10 @@ class APIHandler(BaseHTTPRequestHandler):
             if tier not in ("150", "100"):
                 return self._send({"success": False, "message": "Invalid tier"}, 400)
             user = self._get_user_by_uuid(uuid)
+            if not user or not user["active"]:
+                c = get_db()
+                user = c.execute("SELECT * FROM users WHERE device_install_id = ?", (uuid,)).fetchone()
+                c.close()
             if not user or not user["active"]:
                 return self._send({"success": False, "message": "User not found or inactive"}, 404)
             if user["activation_code"] != code:
@@ -280,6 +286,10 @@ class APIHandler(BaseHTTPRequestHandler):
             code = self.headers.get("X-Activation-Code", "")
             user = self._get_user_by_uuid(uuid)
             if not user or not user["active"]:
+                conn = get_db()
+                user = conn.execute("SELECT * FROM users WHERE device_install_id = ?", (uuid,)).fetchone()
+                conn.close()
+            if not user or not user["active"]:
                 return self._send({"success": False, "message": "User not found or inactive"}, 404)
             if user["activation_code"] != code:
                 return self._send({"success": False, "message": "Invalid activation code"}, 403)
@@ -317,6 +327,10 @@ class APIHandler(BaseHTTPRequestHandler):
             if not uuid:
                 return self._send({"success": False, "message": "Missing uuid"}, 400)
             user = self._get_user_by_uuid(uuid)
+            if not user or not user["active"]:
+                conn = get_db()
+                user = conn.execute("SELECT * FROM users WHERE device_install_id = ?", (uuid,)).fetchone()
+                conn.close()
             if not user or not user["active"]:
                 return self._send({"success": False, "message": "User not found or inactive"}, 404)
             if user["activation_code"] != code:
@@ -398,11 +412,11 @@ class APIHandler(BaseHTTPRequestHandler):
             conn = get_db()
             user = conn.execute("SELECT * FROM users WHERE uuid = ?", (uuid,)).fetchone()
             if not user:
+                user = conn.execute("SELECT * FROM users WHERE phone = ?", (phone,)).fetchone()
+            if not user:
                 return self._send({"success": False, "message": "Device not registered. Contact admin."}, 404)
             if user["activation_code"] != code:
                 return self._send({"success": False, "message": "Invalid activation code"}, 403)
-            if user["phone"] != phone:
-                return self._send({"success": False, "message": "Phone number does not match"}, 403)
             if not user["active"]:
                 return self._send({"success": False, "message": "Device is disabled"}, 403)
 
@@ -411,8 +425,8 @@ class APIHandler(BaseHTTPRequestHandler):
                 return self._send({"success": False, "message": "Subscription expired"}, 403)
 
             conn.execute(
-                "UPDATE users SET device_install_id=?, hardware_id=?, app_version=? WHERE uuid=?",
-                (uuid, hwid, body.get("app_version", ""), uuid)
+                "UPDATE users SET device_install_id=?, hardware_id=?, app_version=? WHERE id=?",
+                (uuid, hwid, body.get("app_version", ""), user["id"])
             )
             conn.commit()
 
