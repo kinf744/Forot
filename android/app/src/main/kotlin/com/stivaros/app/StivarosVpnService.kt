@@ -35,17 +35,13 @@ class StivarosVpnService : VpnService() {
     private var serviceJob = SupervisorJob()
     private var serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
     private var xrayManager: XrayManager? = null
-    private var zivpnManager: ZivpnManager? = null
 
     override fun onCreate() {
         super.onCreate()
         instance = this
         createNotificationChannel()
         xrayManager = XrayManager(this)
-        zivpnManager = ZivpnManager(this)
-        NativeLogger.i("VpnService", "onCreate: managers created")
-        HevTun2Socks.init()
-        NativeLogger.i("VpnService", "HevTun2Socks available=${HevTun2Socks.isAvailable}")
+        NativeLogger.i("VpnService", "onCreate: xrayManager created")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -80,7 +76,6 @@ class StivarosVpnService : VpnService() {
                 val serverPort = intent.getIntExtra("port", 443)
                 val uuid = intent.getStringExtra("uuid") ?: return@launch
                 val protocol = intent.getStringExtra("protocol") ?: "vless"
-                val mode = intent.getStringExtra("mode") ?: "xray"
                 val transport = intent.getStringExtra("transport") ?: "xhttp"
                 val tls = intent.getBooleanExtra("tls", true)
                 val sni = intent.getStringExtra("sni") ?: serverAddress
@@ -88,35 +83,23 @@ class StivarosVpnService : VpnService() {
                 val publicKey = intent.getStringExtra("publicKey") ?: ""
                 val shortId = intent.getStringExtra("shortId") ?: ""
                 val flow = intent.getStringExtra("flow") ?: ""
-                val zivpnPort = intent.getStringExtra("zivpnPort") ?: ""
-                val zivpnPassword = intent.getStringExtra("zivpnPassword") ?: ""
-                val zivpnObfs = intent.getStringExtra("zivpnObfs") ?: ""
 
-                NativeLogger.i("VpnService", "startVpn: address=$serverAddress mode=$mode protocol=$protocol transport=$transport")
+                NativeLogger.i("VpnService", "startVpn: $serverAddress:$serverPort uuid=$uuid transport=$transport sni=$sni host=$host")
 
-                val socksPort: Int
-                if (mode == "zivpn") {
-                    zivpnManager?.errorCallback = { msg ->
-                        NativeLogger.e("VpnService", "Zivpn error callback: $msg")
-                        updateStatus("ERROR", msg)
-                    }
-                    NativeLogger.i("VpnService", "Starting Zivpn...")
-                    zivpnManager?.start(serverAddress, zivpnPort, zivpnPassword, zivpnObfs)
-                    socksPort = zivpnManager?.getSocksPort() ?: 0
-                    NativeLogger.i("VpnService", "Zivpn started, SOCKS port=$socksPort")
-                } else {
-                    xrayManager?.errorCallback = { msg ->
-                        NativeLogger.e("VpnService", "Xray error callback: $msg")
-                        updateStatus("ERROR", msg)
-                    }
-                    NativeLogger.i("VpnService", "Starting Xray...")
-                    xrayManager?.start(
-                        serverAddress, serverPort, uuid, protocol,
-                        transport, tls, sni, host, publicKey, shortId, flow
-                    )
-                    socksPort = xrayManager?.getSocksPort() ?: 0
-                    NativeLogger.i("VpnService", "Xray started, SOCKS port=$socksPort")
+                // Wire up Xray error callback
+                xrayManager?.errorCallback = { msg ->
+                    NativeLogger.e("VpnService", "Xray error callback: $msg")
+                    updateStatus("ERROR", msg)
                 }
+
+                // Start Xray
+                NativeLogger.i("VpnService", "Starting Xray...")
+                xrayManager?.start(
+                    serverAddress, serverPort, uuid, protocol,
+                    transport, tls, sni, host, publicKey, shortId, flow
+                )
+                val socksPort = xrayManager?.getSocksPort() ?: 0
+                NativeLogger.i("VpnService", "Xray started, SOCKS port=$socksPort")
                 if (socksPort == 0) throw Exception("Failed to get SOCKS port")
 
                 // Build VPN interface
@@ -162,9 +145,9 @@ class StivarosVpnService : VpnService() {
     }
 
     private fun startSocksRelay(fd: Int, socksPort: Int) {
-        NativeLogger.i("VpnService", "startSocksRelay: fd=$fd socksPort=$socksPort")
         serviceScope.launch(Dispatchers.IO) {
             try {
+                NativeLogger.i("VpnService", "startSocksRelay: fd=$fd socksPort=$socksPort")
                 val relay = Tun2SocksRelay(
                     ParcelFileDescriptor.fromFd(fd),
                     "127.0.0.1", socksPort
@@ -181,8 +164,6 @@ class StivarosVpnService : VpnService() {
     fun stopVpn() {
         NativeLogger.i("VpnService", "stopVpn()")
         xrayManager?.stop()
-        zivpnManager?.stop()
-        HevTun2Socks.stop()
         try { vpnInterface?.close(); NativeLogger.i("VpnService", "VPN interface closed") } catch (_: Exception) {}
         vpnInterface = null
         try { stopForeground(STOP_FOREGROUND_REMOVE) } catch (_: Exception) {}

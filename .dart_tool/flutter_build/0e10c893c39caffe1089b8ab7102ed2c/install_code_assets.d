@@ -1,0 +1,1 @@
+ /tmp/forot/.dart_tool/flutter_build/0e10c893c39caffe1089b8ab7102ed2c/native_assets.json: 

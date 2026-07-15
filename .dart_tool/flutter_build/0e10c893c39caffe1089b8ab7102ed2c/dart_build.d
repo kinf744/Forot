@@ -1,0 +1,1 @@
+ /tmp/forot/.dart_tool/flutter_build/0e10c893c39caffe1089b8ab7102ed2c/dart_build_result.json:  /opt/flutter/bin/cache/dart-sdk/version /tmp/forot/.dart_tool/package_config.json /tmp/forot/pubspec.yaml

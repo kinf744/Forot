@@ -242,7 +242,7 @@ class AppProvider extends ChangeNotifier {
     final connected = await VpnService.connect(
       address: c.address,
       port: c.port,
-      uuid: _user!.uuid,
+      uuid: c.xrayUuid ?? _user!.uuid,
       protocol: c.protocol,
       transport: c.transport,
       tls: c.tls,
@@ -528,7 +528,7 @@ class AppProvider extends ChangeNotifier {
     final success = await VpnService.connect(
       address: config.address,
       port: config.port,
-      uuid: _user!.uuid,
+      uuid: config.xrayUuid ?? _user!.uuid,
       protocol: config.protocol,
       transport: config.transport,
       tls: config.tls,
